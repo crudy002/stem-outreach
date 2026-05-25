@@ -15,9 +15,11 @@ const POLL_INTERVAL_MS = 500;
 
 export default function CoordinatorDashboard() {
   const [mode, setMode] = useState('simulation'); // 'simulation' | 'live'
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [liveUrl, setLiveUrl] = useState('http://192.168.1.10:8080');
   const [urlDraft, setUrlDraft] = useState('http://192.168.1.10:8080');
   const [connError, setConnError] = useState(null);
+  const [removeError, setRemoveError] = useState(null);
 
   const [nodes, setNodes] = useState([]);
   const [events, setEvents] = useState([]);
@@ -207,6 +209,21 @@ export default function CoordinatorDashboard() {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [events]);
 
+  const removeNode = useCallback(async (nodeId) => {
+    setRemoveError(null);
+    try {
+      const res = await fetch(`${liveUrl}/nodes/${encodeURIComponent(nodeId)}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+    } catch (err) {
+      setRemoveError(`Failed to remove ${nodeId}: ${err.message}`);
+    }
+  }, [liveUrl]);
+
   const posFor = (id, index) => nodeLayout[id] || fallbackPos(index);
 
   const onlineCount = nodes.filter((n) => n.online).length;
@@ -233,6 +250,9 @@ export default function CoordinatorDashboard() {
           <ModeButton active={mode === 'live'} onClick={() => setMode('live')}>
             ● LIVE
           </ModeButton>
+          <ModeButton active={settingsOpen} onClick={() => setSettingsOpen((o) => !o)}>
+            ⚙ SETTINGS
+          </ModeButton>
         </div>
       </div>
 
@@ -257,6 +277,48 @@ export default function CoordinatorDashboard() {
           }}>
             {connError ? `✕ ${connError}` : '● POLLING /state'}
           </span>
+        </div>
+      )}
+
+      {/* Settings panel */}
+      {settingsOpen && (
+        <div style={S.settingsPanel}>
+          <div style={S.panelHead}>
+            <span style={S.panelTitle}>NODE MANAGEMENT</span>
+            {mode !== 'live' && (
+              <span style={{ fontSize: 11, color: '#fbbf24', letterSpacing: '0.1em' }}>
+                ⚠ LIVE MODE REQUIRED — connect to a coordinator to manage nodes
+              </span>
+            )}
+          </div>
+          {removeError && (
+            <div style={{ color: '#ef4444', fontSize: 11, marginBottom: 8 }}>{removeError}</div>
+          )}
+          {mode === 'live' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+              {nodes.length === 0 && (
+                <div style={{ color: '#3d4a63', fontSize: 11 }}>no registered nodes</div>
+              )}
+              {nodes.map((n) => (
+                <div key={n.id} style={S.settingsRow}>
+                  <span style={{
+                    width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                    background: n.online ? '#4ade80' : '#3d4a63',
+                  }} />
+                  <span style={{ color: '#d4dce5', fontWeight: 'bold', width: 80 }}>{n.id}</span>
+                  <span style={{ color: '#5a6b80', width: 60 }}>{n.role}</span>
+                  <span style={{ color: '#a78bfa', width: 48 }}>↑{n.packets_sent}</span>
+                  <span style={{ color: '#4ade80', flex: 1 }}>↓{n.packets_received}</span>
+                  <button
+                    style={S.removeBtn}
+                    onClick={() => removeNode(n.id)}
+                  >
+                    REMOVE
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -495,5 +557,18 @@ const S = {
   footer: {
     marginTop: 18, display: 'flex', justifyContent: 'space-between',
     fontSize: 10, color: '#3d4a63', letterSpacing: '0.12em',
+  },
+  settingsPanel: {
+    background: '#0d1424', border: '1px solid #1e2a3f', borderRadius: 4,
+    padding: 16, marginBottom: 18,
+  },
+  settingsRow: {
+    display: 'flex', alignItems: 'center', gap: 10, fontSize: 11.5,
+    padding: '4px 0', borderBottom: '1px solid #131d30',
+  },
+  removeBtn: {
+    background: 'transparent', border: '1px solid #ef4444', color: '#ef4444',
+    padding: '3px 10px', fontFamily: 'inherit', fontSize: 10,
+    letterSpacing: '0.1em', fontWeight: 'bold', cursor: 'pointer', borderRadius: 2,
   },
 };

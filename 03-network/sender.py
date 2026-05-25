@@ -88,7 +88,10 @@ def main():
     parser.add_argument("--coordinator", default=DEFAULT_COORDINATOR,
                         help="coordinator address as host:port")
     parser.add_argument("--count", type=int, default=1,
-                        help="how many packets to send")
+                        help="how many packets to send per trigger")
+    parser.add_argument("--interactive", action="store_true",
+                        help="keep running; press ENTER (optionally type a "
+                             "number first) to send packets on demand")
     args = parser.parse_args()
 
     # For the dashboard label, prefer the explicit --target-id. If it wasn't
@@ -109,33 +112,50 @@ def main():
     # Announce ourselves so the dashboard shows this node right away.
     report(args.coordinator, args.id, "register")
 
-    for seq in range(1, args.count + 1):
-        packet = build_packet(seq)
-        print(f"\n[{timestamp()}] Packet #{seq} created:")
-        print(f"  {packet}")
+    seq = 0
 
-        # The deliberate pause - a packet takes TIME to travel.
-        print(f"[{timestamp()}] Sending... watch it travel ({TRAVEL_DELAY_SECONDS}s)")
-        time.sleep(TRAVEL_DELAY_SECONDS)
+    def send_batch(count):
+        nonlocal seq
+        for _ in range(count):
+            seq += 1
+            packet = build_packet(seq)
+            print(f"\n[{timestamp()}] Packet #{seq} created:")
+            print(f"  {packet}")
+            print(f"[{timestamp()}] Sending... watch it travel ({TRAVEL_DELAY_SECONDS}s)")
+            time.sleep(TRAVEL_DELAY_SECONDS)
 
-        message_bytes = json.dumps(packet).encode("utf-8")
-        # Note: socket.sendto uses args.target (the routable address),
-        # NEVER target_label. A node id is not something the network
-        # can resolve.
-        sock.sendto(message_bytes, (args.target, args.port))
+            message_bytes = json.dumps(packet).encode("utf-8")
+            sock.sendto(message_bytes, (args.target, args.port))
+            report(args.coordinator, args.id, "send",
+                   detail=f"sent packet #{seq} to {target_label}")
+            print(f"[{timestamp()}] Packet #{seq} sent!")
 
-        # Report the send. The detail string includes target_label so the
-        # dashboard's guessTarget() can find the destination node id.
-        report(args.coordinator, args.id, "send",
-               detail=f"sent packet #{seq} to {target_label}")
+            if _ < count - 1:
+                time.sleep(0.5)
 
-        print(f"[{timestamp()}] Packet #{seq} sent!")
+    if args.interactive:
+        print("\nINTERACTIVE MODE — press ENTER to send packet(s).")
+        print("  Type a number before ENTER to send that many (e.g. '3 ENTER').")
+        print("  Type 'q' and ENTER to quit.\n")
+        try:
+            while True:
+                raw = input("» ").strip()
+                if raw.lower() == "q":
+                    break
+                try:
+                    count = int(raw) if raw else args.count
+                    count = max(1, count)
+                except ValueError:
+                    print("  (enter a number or just press ENTER)")
+                    continue
+                send_batch(count)
+        except (KeyboardInterrupt, EOFError):
+            pass
+        print("\nDone.")
+    else:
+        send_batch(args.count)
+        print("\nDone.")
 
-        # Small gap between packets when sending several.
-        if seq < args.count:
-            time.sleep(0.5)
-
-    print("\nDone.")
     sock.close()
 
 

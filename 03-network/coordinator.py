@@ -116,7 +116,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
         self.end_headers()
 
     def do_GET(self):
@@ -126,6 +126,21 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(snapshot())
         elif self.path == "/" or self.path == "/health":
             self._send_json({"status": "coordinator online"})
+        else:
+            self._send_json({"error": "not found"}, status=404)
+
+    def do_DELETE(self):
+        # DELETE /nodes/<node_id>  — remove a node from the registry.
+        if self.path.startswith("/nodes/"):
+            node_id = self.path[len("/nodes/"):]
+            with state_lock:
+                if node_id in nodes:
+                    del nodes[node_id]
+                    record_event("deregister", node_id, "removed via dashboard")
+                    print(f"[{now_ts()}] - {node_id} removed via dashboard")
+                    self._send_json({"ok": True})
+                else:
+                    self._send_json({"error": "node not found"}, status=404)
         else:
             self._send_json({"error": "not found"}, status=404)
 
