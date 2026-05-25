@@ -224,6 +224,17 @@ export default function CoordinatorDashboard() {
     }
   }, [liveUrl]);
 
+  const resetCoordinator = useCallback(async () => {
+    setRemoveError(null);
+    try {
+      const res = await fetch(`${liveUrl}/reset`, { method: 'POST' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      lastEventIdRef.current = 0;
+    } catch (err) {
+      setRemoveError(`Reset failed: ${err.message}`);
+    }
+  }, [liveUrl]);
+
   const posFor = (id, index) => nodeLayout[id] || fallbackPos(index);
 
   const onlineCount = nodes.filter((n) => n.online).length;
@@ -307,16 +318,21 @@ export default function CoordinatorDashboard() {
                   }} />
                   <span style={{ color: '#d4dce5', fontWeight: 'bold', width: 80 }}>{n.id}</span>
                   <span style={{ color: '#5a6b80', width: 60 }}>{n.role}</span>
-                  <span style={{ color: '#a78bfa', width: 48 }}>↑{n.packets_sent}</span>
-                  <span style={{ color: '#4ade80', flex: 1 }}>↓{n.packets_received}</span>
-                  <button
-                    style={S.removeBtn}
-                    onClick={() => removeNode(n.id)}
-                  >
+                  <span style={{ color: '#3d4a63', flex: 1, fontSize: 10 }}>
+                    {n.ip ? `${n.ip}${n.port ? `:${n.port}` : ''}` : '—'}
+                  </span>
+                  <span style={{ color: '#a78bfa', width: 40 }}>↑{n.packets_sent}</span>
+                  <span style={{ color: '#4ade80', width: 40 }}>↓{n.packets_received}</span>
+                  <button style={S.removeBtn} onClick={() => removeNode(n.id)}>
                     REMOVE
                   </button>
                 </div>
               ))}
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #1e2a3f' }}>
+                <button style={S.resetBtn} onClick={resetCoordinator}>
+                  ✕ CLEAR ALL — deregister all nodes, wipe events &amp; telemetry
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -434,16 +450,19 @@ export default function CoordinatorDashboard() {
             <div style={S.panelTitle}>REGISTERED NODES</div>
             <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
               {nodes.map((n) => (
-                <div key={n.id} style={S.nodeRow}>
+                <div key={n.id} style={{ ...S.nodeRow, flexWrap: 'wrap' }}>
                   <span style={{
-                    width: 7, height: 7, borderRadius: '50%',
+                    width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
                     background: n.online ? '#4ade80' : '#3d4a63',
                     animation: n.online ? 'blink 1.6s infinite' : 'none',
                   }} />
                   <span style={{ color: '#d4dce5', fontWeight: 'bold', width: 64 }}>
                     {n.id}
                   </span>
-                  <span style={{ color: '#5a6b80', flex: 1 }}>{n.role}</span>
+                  <span style={{ color: '#5a6b80', width: 52 }}>{n.role}</span>
+                  <span style={{ color: '#3d4a63', flex: 1, fontSize: 10 }}>
+                    {n.ip ? `${n.ip}${n.port ? `:${n.port}` : ''}` : ''}
+                  </span>
                   <span style={{ color: '#a78bfa' }}>↑{n.packets_sent}</span>
                   <span style={{ color: '#4ade80' }}>↓{n.packets_received}</span>
                 </div>
@@ -570,5 +589,11 @@ const S = {
     background: 'transparent', border: '1px solid #ef4444', color: '#ef4444',
     padding: '3px 10px', fontFamily: 'inherit', fontSize: 10,
     letterSpacing: '0.1em', fontWeight: 'bold', cursor: 'pointer', borderRadius: 2,
+  },
+  resetBtn: {
+    background: 'transparent', border: '1px solid #ef4444', color: '#ef4444',
+    padding: '6px 16px', fontFamily: 'inherit', fontSize: 10,
+    letterSpacing: '0.1em', fontWeight: 'bold', cursor: 'pointer', borderRadius: 2,
+    width: '100%',
   },
 };

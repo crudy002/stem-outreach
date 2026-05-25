@@ -81,18 +81,24 @@ def timestamp():
     return now.strftime("%H:%M:%S.") + f"{now.microsecond // 1000:03d}"
 
 
-def report(coordinator, node_id, action, detail=""):
+def report(coordinator, node_id, action, detail="", port=None):
     """
     Tell the coordinator what we just did. Best-effort: any failure is
     swallowed so the core UDP demo never breaks just because the dashboard
     server happens to be off.
+
+    port is included on registration so the coordinator can store this
+    node's UDP address and hand it to senders on request.
     """
-    payload = json.dumps({
+    body = {
         "node_id": node_id,
         "role": "receiver",
         "action": action,
         "detail": detail,
-    }).encode("utf-8")
+    }
+    if port is not None:
+        body["port"] = port
+    payload = json.dumps(body).encode("utf-8")
     try:
         req = urllib.request.Request(
             f"http://{coordinator}/",
@@ -127,8 +133,9 @@ def main():
     print("=" * 52)
 
     # Announce ourselves so the dashboard shows this node right away,
-    # even before any packet arrives.
-    report(args.coordinator, args.id, "register")
+    # even before any packet arrives. Include our UDP port so senders
+    # can look us up by node ID without needing to know our IP.
+    report(args.coordinator, args.id, "register", port=args.port)
 
     packet_count = 0
     try:
