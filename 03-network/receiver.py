@@ -17,8 +17,11 @@ Run it:
 
 import socket
 import sys
+import os
 import json
 import argparse
+import threading
+import subprocess
 import urllib.request
 from datetime import datetime
 
@@ -27,23 +30,75 @@ LISTEN_ADDRESS = "0.0.0.0"
 DEFAULT_COORDINATOR = "127.0.0.1:8080"
 
 
+def _gui_available():
+    """Return True if we have a shot at showing a desktop dialog."""
+    if sys.platform == "darwin":
+        return True  # macOS always has osascript
+    if sys.platform.startswith("linux"):
+        return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+    return False
+
+
+def show_gui_notification(seq, sender_ip, payload):
+    """Pop a non-blocking desktop dialog/notification if a display is available."""
+    if not _gui_available():
+        return
+
+    title = "Packet Received!"
+    msg_line = payload.get("message", "")
+    body = f"Packet #{seq} from {sender_ip}\n{msg_line}" if msg_line else f"Packet #{seq} from {sender_ip}"
+
+    def _show():
+        # macOS: use osascript display notification (non-modal, appears in NC)
+        if sys.platform == "darwin":
+            try:
+                subprocess.run(
+                    ["osascript", "-e",
+                     f'display notification "{body}" with title "{title}"'],
+                    timeout=3, capture_output=True,
+                )
+                return
+            except Exception:
+                pass
+
+        # Linux / fallback: tkinter modal dialog
+        try:
+            import tkinter as tk
+            from tkinter import messagebox
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes("-topmost", True)
+            messagebox.showinfo(title, body, parent=root)
+            root.destroy()
+        except Exception:
+            pass
+
+    threading.Thread(target=_show, daemon=True).start()
+
+
 def timestamp():
     now = datetime.now()
     return now.strftime("%H:%M:%S.") + f"{now.microsecond // 1000:03d}"
 
 
-def report(coordinator, node_id, action, detail=""):
+def report(coordinator, node_id, action, detail="", port=None):
     """
     Tell the coordinator what we just did. Best-effort: any failure is
     swallowed so the core UDP demo never breaks just because the dashboard
     server happens to be off.
+
+    port is included on registration so the coordinator can store this
+    node's UDP address and hand it to senders on request.
     """
-    payload = json.dumps({
+    body = {
         "node_id": node_id,
         "role": "receiver",
         "action": action,
         "detail": detail,
-    }).encode("utf-8")
+    }
+    if port is not None:
+        body["port"] = port
+    payload = json.dumps(body).encode("utf-8")
     try:
         req = urllib.request.Request(
             f"http://{coordinator}/",
@@ -78,8 +133,9 @@ def main():
     print("=" * 52)
 
     # Announce ourselves so the dashboard shows this node right away,
-    # even before any packet arrives.
-    report(args.coordinator, args.id, "register")
+    # even before any packet arrives. Include our UDP port so senders
+    # can look us up by node ID without needing to know our IP.
+    report(args.coordinator, args.id, "register", port=args.port)
 
     packet_count = 0
     try:
@@ -101,6 +157,9 @@ def main():
             # Report the arrival so the dashboard can flash this node.
             report(args.coordinator, args.id, "receive",
                    detail=f"got packet #{seq} from {sender_ip}")
+
+            # Show a desktop notification/dialog if a display is available.
+            show_gui_notification(seq, sender_ip, payload)
 
             # --- HARDWARE HOOK ---------------------------------------------
             # Wire an LED here later:  led.on(); sleep(0.5); led.off()
