@@ -1,0 +1,12 @@
+3. Confirm the Pi actually sees it
+Plug the dongle in, then:
+bashrtl_test
+Success looks like Found 1 device(s) followed by the tuner name (e.g. Rafael Micro R820T). If it says "No supported devices found," the usual culprits, in order: the dongle isn't fully seated, you skipped the reboot in step 2, or — surprisingly common — a flaky/long USB extension cable. Ctrl-C to quit.
+rtl_test proves the device is detected, but it isn't "receiving a signal" yet. For that:
+4. The actual "whoa, it works" moment — hear an FM station
+bashrtl_fm -M wbfm -f 96.9M - | aplay -r 32k -f S16_LE
+Swap 96.9M for a strong local station. Plug headphones/speakers into the Pi's audio jack. If you hear music or talk, the dongle is pulling a real radio signal out of the air, decoding it, and playing it — that's the whole chain working end to end. (aplay ships with alsa-utils, normally already on Raspberry Pi OS; if it's missing, sudo apt install -y alsa-utils.)
+What this teaches (and why it's a good booth candidate): radio is just invisible waves carrying information, and this $30 dongle is a tunable "ear" for them. Tuning -f to a different frequency is physically picking a different conversation out of the same air — a great companion to your UDP packet demo, since both make an invisible thing (a packet / a radio wave) into something a kid can point at. Even the antenna matters visibly: touch it, move it, watch reception change.
+
+If you have the RTL-SDR Blog V4 specifically: the apt driver above will detect it but give you no signal, wrong frequencies, or garbage — the V4's changed circuitry requires updated drivers, and without them it simply won't function correctly. You'd compile the Osmocom driver from source instead (still straightforward, ~5 min): blacklist as above, then sudo apt install -y libusb-1.0-0-dev git cmake build-essential, git clone https://gitea.osmocom.org/sdr/rtl-sdr.git, build with cmake ../ -DINSTALL_UDEV_RULES=ON -DDETACH_KERNEL_DRIVER=ON, make, sudo make install, sudo ldconfig, reboot. One known gotcha: use the Osmocom fork, not the rtlsdrblog GitHub repo — the latter has a broken commit that fails to compile. Then steps 3–4 are identical. rtl-sdr.comGitHub
+Want me to wrap step 4 into a short, fail-loudly Python launcher (checks the dongle is present, prints a plain-English error if not, then starts the FM stream) so a booth volunteer can run one script instead of remembering the pipe?
