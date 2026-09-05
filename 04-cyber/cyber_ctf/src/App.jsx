@@ -410,7 +410,7 @@ export default function App() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0a1628', color: '#c8d4e3', fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace', padding: '24px' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#0a1628', color: '#c8d4e3', fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace', padding: '24px' }}>
       <style>{`
         @keyframes shake {
           0%, 100% { transform: translateX(0); }
@@ -891,7 +891,7 @@ export default function App() {
         </div>
       )}
 
-      <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#3a4a66', letterSpacing: '0.15em' }}>
+      <div style={{ marginTop: 'auto', paddingTop: '20px', display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#3a4a66', letterSpacing: '0.15em' }}>
         <span>STEM_OUTREACH_v0.1 // PROTOTYPE</span>
         <span>CYBER_RANGE // DEFENSE TECH OUTREACH</span>
       </div>
