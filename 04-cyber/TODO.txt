@@ -1,0 +1,6 @@
+- Add some "FAIL" conditions where the user gets "Caught" by intrusion detection system
+    - add to many login attempts failure mode
+    - add a dont look at this file/touch this file failure mode
+
+
+- Add some more graphics/animations for things like exfil/download data
