@@ -20,6 +20,7 @@ export default function App() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [sudoPrompt, setSudoPrompt] = useState(null); // null, or the pending sudo arg (e.g. "su")
   const [sudoAttempts, setSudoAttempts] = useState(0);
+  const [copiedFlag, setCopiedFlag] = useState(false);
   const [foundCreds, setFoundCreds] = useState(false);
   const [escalateInput, setEscalateInput] = useState('');
   const [escalated, setEscalated] = useState(false);
@@ -159,6 +160,7 @@ export default function App() {
       const resolvedDir = resolvePath(cwd, dirPart);
       if (!isDir(resolvedDir)) return;
       candidates = listChildren(resolvedDir)
+        .map((name) => name.replace(/\/$/, ''))
         .filter((name) => name.startsWith(namePart))
         .map((name) => (dirPart ? `${dirPart}/${name}` : name));
     }
@@ -206,11 +208,11 @@ export default function App() {
         setCwd(resolved);
       }
     } else if (op === 'pwd') {
-      output = `/home/user${cwd ? '/' + cwd : ''}`;
+      output = `/home/admin${cwd ? '/' + cwd : ''}`;
     } else if (op === 'whoami') {
-      output = 'user';
+      output = `admin (callsign: ${playerName || 'unknown'})`;
     } else if (op === 'id') {
-      output = 'uid=1000(user) gid=1000(user) groups=1000(user)';
+      output = 'uid=1000(admin) gid=1000(admin) groups=1000(admin)';
     } else if (op === 'history') {
       output = cmdHistory.length ? cmdHistory.map((c, i) => `  ${i + 1}  ${c}`).join('\n') : '(no history yet)';
     } else if (op === 'man') {
@@ -279,7 +281,7 @@ export default function App() {
       } else if (!foundCreds) {
         output = 'sudo: you must find the credentials first';
       } else {
-        setTerminalOutput((prev) => [...prev, { type: 'cmd', text: `${promptPath()} $ ${cmd}` }]);
+        setTerminalOutput((prev) => [...prev, { type: 'cmd', text: `admin@target:${promptPath()}$ ${cmd}` }]);
         setSudoPrompt(arg);
         setCmdHistory((prev) => [...prev, cmd]);
         setHistoryIndex(-1);
@@ -294,10 +296,32 @@ export default function App() {
       output = `${op}: command not found. Type 'help' for available commands.`;
     }
 
-    setTerminalOutput((prev) => [...prev, { type: 'cmd', text: `user@target:${promptPath()}$ ${cmd}` }, { type: 'out', text: output }]);
+    const hasFlag = typeof output === 'string' && output.includes(FLAG);
+    setTerminalOutput((prev) => [...prev, { type: 'cmd', text: `admin@target:${promptPath()}$ ${cmd}` }, { type: 'out', text: output, flag: hasFlag }]);
     setCmdHistory((prev) => [...prev, cmd]);
     setHistoryIndex(-1);
     setCommand('');
+  };
+
+  const copyToClipboard = (text) => {
+    const flash = () => { setCopiedFlag(true); setTimeout(() => setCopiedFlag(false), 1500); };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(flash).catch(() => fallbackCopy(text, flash));
+    } else {
+      fallbackCopy(text, flash);
+    }
+  };
+
+  const fallbackCopy = (text, onDone) => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try { document.execCommand('copy'); onDone(); } catch { /* clipboard unavailable */ }
+    document.body.removeChild(ta);
   };
 
   const submitSudoPassword = () => {
@@ -670,7 +694,7 @@ export default function App() {
             style={{ background: '#081320', border: '1px solid #1f3354', borderRadius: '4px', padding: '20px', height: '480px', display: 'flex', flexDirection: 'column' }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '14px', paddingBottom: '10px', borderBottom: '1px solid #152942' }}>
-              <span style={{ fontSize: '11px', color: '#5a7090', letterSpacing: '0.2em' }}>SHELL // user@target</span>
+              <span style={{ fontSize: '11px', color: '#5a7090', letterSpacing: '0.2em' }}>SHELL // admin@target</span>
               <span style={{ fontSize: '11px', color: '#4ade80' }}>● CONNECTED</span>
             </div>
 
@@ -680,13 +704,25 @@ export default function App() {
                 Hint: try 'ls' to see what's around.
               </div>
               {terminalOutput.map((line, i) => (
-                <div key={i} style={{ color: line.type === 'cmd' ? '#5b9bd5' : '#c8d4e3', marginBottom: line.type === 'out' ? '8px' : '0' }}>{line.text}</div>
+                <div key={i} style={{ color: line.type === 'cmd' ? '#5b9bd5' : '#c8d4e3', marginBottom: line.type === 'out' ? '8px' : '0' }}>
+                  {line.text}
+                  {line.flag && (
+                    <div style={{ marginTop: '6px' }}>
+                      <button
+                        onClick={() => copyToClipboard(FLAG)}
+                        style={{ background: 'transparent', border: '1px solid #2a4870', color: copiedFlag ? '#4ade80' : '#5b9bd5', padding: '4px 10px', fontFamily: 'inherit', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', borderRadius: '2px' }}
+                      >
+                        {copiedFlag ? '✓ Copied!' : '📋 Copy Flag'}
+                      </button>
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderTop: '1px solid #152942', paddingTop: '12px' }}>
               <span style={{ color: sudoPrompt !== null ? '#fbbf24' : '#5b9bd5', fontSize: '13px', whiteSpace: 'nowrap' }}>
-                {sudoPrompt !== null ? '[sudo] password for user:' : `user@target:${promptPath()}$`}
+                {sudoPrompt !== null ? '[sudo] password for user:' : `admin@target:${promptPath()}$`}
               </span>
               <input
                 ref={commandInputRef}
@@ -705,15 +741,29 @@ export default function App() {
               <div style={{ fontSize: '11px', color: '#5a7090', letterSpacing: '0.2em', marginBottom: '12px' }}>OBJECTIVES</div>
               <div style={{ fontSize: '12px', lineHeight: '1.8' }}>
                 <div style={{ color: foundCreds ? '#4ade80' : '#c8d4e3' }}>{foundCreds ? '✓' : '◯'} Locate credentials file</div>
-                <div style={{ color: '#3a4a66' }}>◯ Run 'sudo su' and enter the password</div>
+                <div style={{ color: foundCreds ? '#fbbf24' : '#3a4a66' }}>◯ Run 'sudo su' and enter the password</div>
               </div>
             </div>
 
             <div style={{ background: '#0f1f33', border: '1px solid #1f3354', borderRadius: '4px', padding: '16px' }}>
               <div style={{ fontSize: '11px', color: '#fbbf24', letterSpacing: '0.2em', marginBottom: '10px' }}>⚠ INTEL DROP</div>
-              <div style={{ fontSize: '12px', color: '#8da3c0', lineHeight: '1.6' }}>
-                Try <span style={{ color: '#5b9bd5' }}>ls config/</span>. Devs sometimes leave secrets in plain text. Tab-complete file names, and use ↑/↓ to reuse past commands.
-              </div>
+              {!foundCreds ? (
+                <div style={{ fontSize: '12px', color: '#8da3c0', lineHeight: '1.6' }}>
+                  Try <span style={{ color: '#5b9bd5' }}>ls config/</span>. Devs sometimes leave secrets in plain text. Tab-complete file names, and use ↑/↓ to reuse past commands.
+                </div>
+              ) : (
+                <div style={{ fontSize: '12px', color: '#8da3c0', lineHeight: '1.6' }}>
+                  Got the password? Use the <span style={{ color: '#5b9bd5' }}>📋 Copy Flag</span> button on that output, then run <span style={{ color: '#5b9bd5' }}>sudo su</span> and paste it (Ctrl/Cmd+V) when prompted.
+                  {sudoPrompt === null && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setCommand('sudo su'); commandInputRef.current?.focus(); }}
+                      style={{ display: 'block', marginTop: '10px', background: 'transparent', border: '1px solid #2a4870', color: '#5b9bd5', padding: '6px 12px', fontFamily: 'inherit', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', borderRadius: '2px' }}
+                    >
+                      ⌨ Fill in 'sudo su'
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             <div style={{ background: '#0f1f33', border: '1px solid #1f3354', borderRadius: '4px', padding: '16px' }}>
