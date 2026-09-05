@@ -1,7 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 
+// The leaderboard API runs standalone (see ../leaderboard-api) and defaults
+// to localhost:8000. Override with VITE_LEADERBOARD_API_URL when the API is
+// hosted elsewhere (e.g. a shared box on the booth LAN).
+const API_BASE = import.meta.env.VITE_LEADERBOARD_API_URL || 'http://localhost:8000';
+const STATION_ID = import.meta.env.VITE_STATION_ID || null;
+
 export default function App() {
-  const [stage, setStage] = useState('login'); // login, filesystem, escalate, hacked, victory
+  const [stage, setStage] = useState('start'); // start, login, filesystem, escalate, hacked, victory
+  const [playerName, setPlayerName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginAttempts, setLoginAttempts] = useState(0);
@@ -11,12 +18,66 @@ export default function App() {
   const [foundCreds, setFoundCreds] = useState(false);
   const [escalateInput, setEscalateInput] = useState('');
   const [escalated, setEscalated] = useState(false);
-  const [progress, setProgress] = useState(20);
+  const [progress, setProgress] = useState(0);
+  const [startTime, setStartTime] = useState(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(null);
+  const [submitStatus, setSubmitStatus] = useState('idle'); // idle, submitting, done, error
+  const [rank, setRank] = useState(null);
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [leaderboardError, setLeaderboardError] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
   const terminalRef = useRef(null);
 
   useEffect(() => {
     if (terminalRef.current) terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
   }, [terminalOutput]);
+
+  const fetchLeaderboard = () => {
+    fetch(`${API_BASE}/scores?limit=10`)
+      .then((res) => {
+        if (!res.ok) throw new Error('bad response');
+        return res.json();
+      })
+      .then((data) => {
+        setLeaderboard(data);
+        setLeaderboardError(false);
+      })
+      .catch(() => setLeaderboardError(true));
+  };
+
+  const openLeaderboard = () => {
+    setShowLeaderboard(true);
+    fetchLeaderboard();
+  };
+
+  const submitScore = (elapsed) => {
+    setSubmitStatus('submitting');
+    fetch(`${API_BASE}/scores`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        player_name: playerName || 'Anonymous',
+        elapsed_seconds: elapsed,
+        station_id: STATION_ID,
+      }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('bad response');
+        return res.json();
+      })
+      .then((data) => {
+        setRank(data.rank);
+        setSubmitStatus('done');
+        fetchLeaderboard();
+      })
+      .catch(() => setSubmitStatus('error'));
+  };
+
+  const beginMission = () => {
+    setStartTime(Date.now());
+    setStage('login');
+    setProgress(20);
+  };
 
   const tryLogin = () => {
     if (username.toLowerCase() === 'admin' && password.toLowerCase() === 'password') {
@@ -98,14 +159,18 @@ export default function App() {
 
   const runEscalation = (action) => {
     if (action === 'inject') {
+      const elapsed = startTime ? (Date.now() - startTime) / 1000 : null;
       setEscalated(true);
       setStage('hacked');
       setProgress(100);
+      setElapsedSeconds(elapsed);
+      if (elapsed !== null) submitScore(elapsed);
     }
   };
 
   const reset = () => {
-    setStage('login');
+    setStage('start');
+    setPlayerName('');
     setUsername('');
     setPassword('');
     setLoginAttempts(0);
@@ -114,7 +179,12 @@ export default function App() {
     setFoundCreds(false);
     setEscalateInput('');
     setEscalated(false);
-    setProgress(20);
+    setProgress(0);
+    setStartTime(null);
+    setElapsedSeconds(null);
+    setSubmitStatus('idle');
+    setRank(null);
+    setShowLeaderboard(false);
   };
 
   return (
@@ -165,10 +235,20 @@ export default function App() {
             <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#5b9bd5', letterSpacing: '0.05em' }}>CYBER OPERATIONS RANGE</div>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '24px', fontSize: '11px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '10px', fontSize: '11px', alignItems: 'center' }}>
+          <button onClick={openLeaderboard} style={{ background: 'transparent', border: '1px solid #2a4870', color: '#5a7090', padding: '6px 12px', fontFamily: 'inherit', fontSize: '10px', letterSpacing: '0.15em', cursor: 'pointer', borderRadius: '2px' }}>🏆 LEADERBOARD</button>
           <button onClick={reset} style={{ background: 'transparent', border: '1px solid #2a4870', color: '#5a7090', padding: '6px 12px', fontFamily: 'inherit', fontSize: '10px', letterSpacing: '0.15em', cursor: 'pointer', borderRadius: '2px' }}>↻ RESET</button>
         </div>
       </div>
+
+      {showLeaderboard && (
+        <LeaderboardModal
+          scores={leaderboard}
+          error={leaderboardError}
+          onRefresh={fetchLeaderboard}
+          onClose={() => setShowLeaderboard(false)}
+        />
+      )}
 
       {/* Mission progress */}
       <div style={{ background: '#0f1f33', border: '1px solid #1f3354', borderRadius: '4px', padding: '14px 18px', marginBottom: '20px' }}>
@@ -180,12 +260,79 @@ export default function App() {
           <div style={{ height: '100%', width: `${progress}%`, background: 'linear-gradient(90deg, #5b9bd5, #4ade80)', transition: 'width 0.6s ease' }}></div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', fontSize: '10px' }}>
-          <span style={{ color: stage !== 'login' ? '#4ade80' : '#fbbf24' }}>● BREACH ACCESS</span>
+          <span style={{ color: !['start', 'login'].includes(stage) ? '#4ade80' : stage === 'login' ? '#fbbf24' : '#3a4a66' }}>● BREACH ACCESS</span>
           <span style={{ color: foundCreds ? '#4ade80' : stage === 'filesystem' ? '#fbbf24' : '#3a4a66' }}>● FIND CREDENTIALS</span>
           <span style={{ color: stage === 'escalate' || stage === 'hacked' ? '#4ade80' : '#3a4a66' }}>● ESCALATE PRIVILEGES</span>
           <span style={{ color: stage === 'hacked' ? '#4ade80' : '#3a4a66' }}>● DEPLOY PAYLOAD</span>
         </div>
       </div>
+
+      {/* Stage: START (name entry) */}
+      {stage === 'start' && (
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <div style={{ background: '#0f1f33', border: '1px solid #1f3354', borderRadius: '4px', padding: '36px', maxWidth: '480px', width: '100%' }}>
+            <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+              <img
+                src="/navsea-logo.png"
+                alt="NAVSEA NSWC Dahlgren Division — Dam Neck Activity"
+                style={{ height: '88px', width: 'auto', display: 'block', margin: '0 auto 20px' }}
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              />
+              <div style={{ fontSize: '11px', letterSpacing: '0.3em', color: '#5a7090', marginBottom: '6px' }}>CYBER OPERATIONS RANGE</div>
+              <div style={{ fontSize: '20px', color: '#5b9bd5', letterSpacing: '0.1em' }}>MISSION BRIEFING</div>
+            </div>
+
+            <div style={{ fontSize: '13px', lineHeight: '1.7', color: '#c8d4e3', marginBottom: '20px', textAlign: 'center' }}>
+              Enter your callsign to start the clock and get on the leaderboard.
+            </div>
+
+            <div style={{ marginBottom: '24px' }}>
+              <div style={{ fontSize: '10px', color: '#5a7090', letterSpacing: '0.2em', marginBottom: '6px' }}>CALLSIGN</div>
+              <input
+                value={playerName}
+                onChange={(e) => setPlayerName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && beginMission()}
+                maxLength={40}
+                autoFocus
+                style={{
+                  width: '100%',
+                  background: '#081320',
+                  border: '1px solid #2a4870',
+                  color: '#5b9bd5',
+                  padding: '12px 14px',
+                  fontFamily: 'inherit',
+                  fontSize: '14px',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                  borderRadius: '2px',
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#5b9bd5'}
+                onBlur={(e) => e.target.style.borderColor = '#2a4870'}
+              />
+            </div>
+
+            <button
+              onClick={beginMission}
+              disabled={!playerName.trim()}
+              style={{
+                width: '100%',
+                background: 'linear-gradient(180deg, #152942 0%, #0f1f33 100%)',
+                border: '1px solid #5b9bd5',
+                color: playerName.trim() ? '#5b9bd5' : '#3a4a66',
+                padding: '14px',
+                fontFamily: 'inherit',
+                fontSize: '13px',
+                letterSpacing: '0.2em',
+                fontWeight: 'bold',
+                cursor: playerName.trim() ? 'pointer' : 'not-allowed',
+                borderRadius: '2px',
+              }}
+            >
+              ▶ START MISSION
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Stage: LOGIN */}
       {stage === 'login' && (
@@ -432,6 +579,24 @@ export default function App() {
               • Privilege escalation turns small wins into full compromise<br/>
               • Defense in depth blocks each stage independently
             </div>
+
+            <div style={{ borderTop: '1px solid #1f3354', marginTop: '16px', paddingTop: '16px' }}>
+              <div style={{ fontSize: '11px', color: '#5a7090', letterSpacing: '0.2em', marginBottom: '8px' }}>YOUR TIME</div>
+              <div style={{ fontSize: '18px', color: '#4ade80', fontFamily: 'monospace' }}>
+                {elapsedSeconds !== null ? `${elapsedSeconds.toFixed(1)}s` : '—'}
+              </div>
+              <div style={{ fontSize: '11px', color: '#8da3c0', marginTop: '6px' }}>
+                {submitStatus === 'submitting' && 'Submitting to leaderboard…'}
+                {submitStatus === 'done' && rank && `Ranked #${rank} on the leaderboard`}
+                {submitStatus === 'error' && 'Could not reach the leaderboard server — score not recorded.'}
+              </div>
+              <button
+                onClick={openLeaderboard}
+                style={{ marginTop: '10px', background: 'transparent', border: '1px solid #2a4870', color: '#5b9bd5', padding: '8px 16px', fontFamily: 'inherit', fontSize: '11px', letterSpacing: '0.15em', cursor: 'pointer', borderRadius: '2px' }}
+              >
+                🏆 VIEW LEADERBOARD
+              </button>
+            </div>
           </div>
 
           <button
@@ -457,6 +622,56 @@ export default function App() {
       <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#3a4a66', letterSpacing: '0.15em' }}>
         <span>STEM_OUTREACH_v0.1 // PROTOTYPE</span>
         <span>CYBER_RANGE // DEFENSE TECH OUTREACH</span>
+      </div>
+    </div>
+  );
+}
+
+function LeaderboardModal({ scores, error, onRefresh, onClose }) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(4, 9, 18, 0.75)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ background: '#0f1f33', border: '1px solid #2a4870', borderRadius: '4px', padding: '28px', width: '420px', maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+          <div style={{ fontSize: '14px', color: '#5b9bd5', letterSpacing: '0.15em' }}>🏆 FASTEST TIMES</div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#5a7090', fontSize: '16px', cursor: 'pointer' }}>✕</button>
+        </div>
+
+        {error && (
+          <div style={{ fontSize: '12px', color: '#ef4444', marginBottom: '12px' }}>
+            Could not reach the leaderboard server.
+          </div>
+        )}
+
+        {!error && scores.length === 0 && (
+          <div style={{ fontSize: '12px', color: '#8da3c0' }}>No runs recorded yet — be the first!</div>
+        )}
+
+        {!error && scores.length > 0 && (
+          <div style={{ fontSize: '13px', color: '#c8d4e3' }}>
+            {scores.map((s) => (
+              <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #152942' }}>
+                <span>#{s.rank} {s.player_name}</span>
+                <span style={{ color: '#4ade80', fontFamily: 'monospace' }}>{s.elapsed_seconds.toFixed(1)}s</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <button
+          onClick={onRefresh}
+          style={{ marginTop: '18px', width: '100%', background: 'transparent', border: '1px solid #2a4870', color: '#5a7090', padding: '10px', fontFamily: 'inherit', fontSize: '11px', letterSpacing: '0.15em', cursor: 'pointer', borderRadius: '2px' }}
+        >
+          ↻ REFRESH
+        </button>
       </div>
     </div>
   );
