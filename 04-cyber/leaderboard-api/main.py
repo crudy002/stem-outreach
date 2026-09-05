@@ -26,10 +26,12 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.responses import HTMLResponse
 
 DB_PATH = Path(__file__).parent / "leaderboard.db"
 
-app = FastAPI(title="Cyber CTF Leaderboard")
+app = FastAPI(title="Cyber CTF Leaderboard", docs_url=None)
 
 # The booth frontend is served from a different origin/port (Vite dev
 # server), and later from other Pis on the LAN — allow any origin rather
@@ -85,6 +87,42 @@ class ScoreOut(BaseModel):
     completed_at: str
     rank: int
 
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html() -> HTMLResponse:
+    # 1. Generate the standard Swagger UI HTML response framework
+    original_response = get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title=f"{app.title} - Swagger UI",
+    )
+    
+    # 2. Extract the raw HTML string
+    html_content = original_response.body.decode("utf-8")
+    
+    # 3. Define your custom dark mode CSS overrides
+    swagger_extra_html = """
+    <style>
+        /* Simple custom overrides or a full dark theme injection */
+        html { color-scheme: dark; }
+        body { background-color: #1b1b1b !important; color: #f8f8f8 !important; }
+        .swagger-ui { filter: invert(1) hue-rotate(180deg); } /* Quick invert trick */
+        .swagger-ui .microlight { filter: invert(1) hue-rotate(180deg); } /* Keep code block readable */
+        
+        /* Optional fix for inverted authorization/dropdown locks and icons */
+        .swagger-ui .auth-wrapper .authorize, 
+        .swagger-ui .model-box-control { filter: invert(0); }
+    </style>
+    """
+    
+    # 4. Inject your style right before the closing body tag
+    modified_html = html_content.replace("</body>", f"{swagger_extra_html}</body>")
+    
+    # 5. Return the modified document safely
+    return HTMLResponse(content=modified_html)
+
+
+@app.get("/")
+def read_root():
+    return {"Hello": "World"}
 
 @app.get("/health")
 def health():
