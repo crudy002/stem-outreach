@@ -21,13 +21,29 @@ at one of these.
 
 ## How to play it (for testing)
 
-1. Login screen: try anything — it tells you when you're wrong. The intel
+1. Enter a callsign on the mission briefing screen — this starts the clock
+   and is the name recorded on the leaderboard.
+2. Login screen: try anything — it tells you when you're wrong. The intel
    panel hints: `admin` / `password`.
-2. Terminal: `ls`, then `ls config/`, then `cat config/credentials.txt`.
-   Copy the flag from that file.
-3. `sudo <that flag>` elevates you.
-4. Pick "INJECT PAYLOAD" to win the final flag.
-5. RESET in the header puts you back to login for the next kid.
+3. Terminal: `ls`, then `ls config/`, then `cat config/credentials.txt`
+   (or `grep password config/credentials.txt`). Copy the flag from that
+   file. The shell also supports `cd`, `pwd`, `head`, `find`, `file`,
+   `whoami`, `id`, `history`, `man <cmd>`, Tab-completion, and ↑/↓ to
+   recall previous commands.
+4. `sudo su` prompts for a password (masked input, 3 attempts, just like
+   a real terminal) — enter the flag from credentials.txt.
+5. Pick "INJECT PAYLOAD" to win the final flag.
+6. The finish screen records the run time to the leaderboard API (see
+   [../leaderboard-api](../leaderboard-api)) and shows your rank; the
+   🏆 LEADERBOARD button (header, or on the finish screen) shows the
+   fastest times.
+7. RESET in the header puts you back to the callsign screen for the next
+   kid.
+
+The leaderboard integration is optional — if `../leaderboard-api` isn't
+running, the game still plays fine; score submission just fails silently
+with a note on the finish screen. Point it at a non-default API host with
+`VITE_LEADERBOARD_API_URL` (see `.env.example`).
 
 ## Where things live
 

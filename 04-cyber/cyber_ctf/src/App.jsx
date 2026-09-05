@@ -15,6 +15,11 @@ export default function App() {
   const [shake, setShake] = useState(false);
   const [terminalOutput, setTerminalOutput] = useState([]);
   const [command, setCommand] = useState('');
+  const [cwd, setCwd] = useState('');
+  const [cmdHistory, setCmdHistory] = useState([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [sudoPrompt, setSudoPrompt] = useState(null); // null, or the pending sudo arg (e.g. "su")
+  const [sudoAttempts, setSudoAttempts] = useState(0);
   const [foundCreds, setFoundCreds] = useState(false);
   const [escalateInput, setEscalateInput] = useState('');
   const [escalated, setEscalated] = useState(false);
@@ -100,50 +105,177 @@ export default function App() {
     'projects/': null,
     'projects/notes.md': 'Reminder: rotate the root password.\nAlso need to fix that thing in credentials.txt.',
   };
+  const FLAG = 'ctf{w34k_p455w0rd5_4r3_b4d}';
+  const COMMANDS = ['ls', 'cat', 'cd', 'pwd', 'whoami', 'id', 'head', 'file', 'find', 'grep', 'man', 'history', 'sudo', 'clear', 'help'];
+
+  const isDir = (p) => p === '' || fileSystem[p + '/'] !== undefined;
+  const isFile = (p) => fileSystem[p] !== undefined && fileSystem[p] !== null;
+
+  const listChildren = (p) => {
+    if (p === '') {
+      return Object.keys(fileSystem).filter((k) => !k.includes('/') || k.endsWith('/'));
+    }
+    const prefix = p + '/';
+    return Object.keys(fileSystem)
+      .filter((k) => k.startsWith(prefix) && k !== prefix && !k.slice(prefix.length).includes('/'))
+      .map((k) => k.replace(prefix, ''));
+  };
+
+  const resolvePath = (base, input) => {
+    if (input === '~') return '';
+    if (!input) return base;
+    const parts = input.startsWith('/') ? [] : base.split('/').filter(Boolean);
+    for (const seg of input.split('/').filter(Boolean)) {
+      if (seg === '.') continue;
+      else if (seg === '..') parts.pop();
+      else parts.push(seg);
+    }
+    return parts.join('/');
+  };
+
+  const promptPath = () => (cwd ? `~/${cwd}` : '~');
+
+  const completeToken = () => {
+    const parts = command.split(' ');
+    const tokenIndex = parts.length - 1;
+    const partial = parts[tokenIndex];
+
+    let candidates;
+    if (tokenIndex === 0) {
+      candidates = COMMANDS.filter((c) => c.startsWith(partial));
+    } else {
+      const lastSlash = partial.lastIndexOf('/');
+      const dirPart = lastSlash >= 0 ? partial.slice(0, lastSlash) : '';
+      const namePart = lastSlash >= 0 ? partial.slice(lastSlash + 1) : partial;
+      const resolvedDir = resolvePath(cwd, dirPart);
+      if (!isDir(resolvedDir)) return;
+      candidates = listChildren(resolvedDir)
+        .filter((name) => name.startsWith(namePart))
+        .map((name) => (dirPart ? `${dirPart}/${name}` : name));
+    }
+
+    if (candidates.length === 1) {
+      const isCandidateDir = tokenIndex !== 0 && isDir(resolvePath(cwd, candidates[0]));
+      parts[tokenIndex] = candidates[0] + (isCandidateDir ? '/' : '');
+      setCommand(parts.join(' ') + (isCandidateDir ? '' : ' '));
+    } else if (candidates.length > 1) {
+      setTerminalOutput((prev) => [...prev, { type: 'out', text: candidates.join('  ') }]);
+    }
+  };
+
+  const navigateHistory = (direction) => {
+    if (cmdHistory.length === 0) return;
+    let nextIndex = historyIndex + direction;
+    nextIndex = Math.max(-1, Math.min(cmdHistory.length - 1, nextIndex));
+    setHistoryIndex(nextIndex);
+    setCommand(nextIndex === -1 ? '' : cmdHistory[cmdHistory.length - 1 - nextIndex]);
+  };
 
   const handleCommand = () => {
     const cmd = command.trim();
     if (!cmd) return;
 
     let output = '';
-    const parts = cmd.split(' ');
+    const parts = cmd.split(' ').filter(Boolean);
     const op = parts[0];
     const arg = parts.slice(1).join(' ');
+    const target = resolvePath(cwd, arg);
 
     if (op === 'ls') {
-      if (!arg || arg === '.') {
-        output = Object.keys(fileSystem).filter((k) => !k.includes('/') || k.endsWith('/')).join('  ');
+      const dirArg = arg || '.';
+      const resolved = resolvePath(cwd, dirArg);
+      if (!isDir(resolved)) {
+        output = isFile(resolved) ? arg : `ls: ${arg}: No such directory`;
       } else {
-        const entries = Object.keys(fileSystem).filter((k) => k.startsWith(arg + '/') || k.startsWith(arg));
-        output = entries.length ? entries.map((e) => e.replace(arg + '/', '').replace(/\/$/, '')).filter(Boolean).join('  ') : `ls: ${arg}: No such directory`;
+        output = listChildren(resolved).join('  ');
       }
-    } else if (op === 'cat') {
-      if (!arg) {
-        output = 'cat: missing operand';
-      } else if (fileSystem[arg] === undefined && fileSystem[arg] !== null) {
-        output = `cat: ${arg}: No such file`;
-      } else if (fileSystem[arg] === null) {
-        output = `cat: ${arg}: Is a directory`;
+    } else if (op === 'cd') {
+      const resolved = arg ? resolvePath(cwd, arg) : '';
+      if (!isDir(resolved)) {
+        output = `cd: ${arg}: No such directory`;
       } else {
-        output = fileSystem[arg];
-        if (arg === 'config/credentials.txt' && !foundCreds) {
+        setCwd(resolved);
+      }
+    } else if (op === 'pwd') {
+      output = `/home/user${cwd ? '/' + cwd : ''}`;
+    } else if (op === 'whoami') {
+      output = 'user';
+    } else if (op === 'id') {
+      output = 'uid=1000(user) gid=1000(user) groups=1000(user)';
+    } else if (op === 'history') {
+      output = cmdHistory.length ? cmdHistory.map((c, i) => `  ${i + 1}  ${c}`).join('\n') : '(no history yet)';
+    } else if (op === 'man') {
+      const topics = {
+        ls: 'ls - list directory contents',
+        cat: 'cat - print file contents',
+        cd: 'cd - change working directory',
+        sudo: 'sudo - execute a command as another user',
+        grep: 'grep - search file contents for a pattern',
+        find: 'find - search for files by name',
+        head: 'head - print the first lines of a file',
+      };
+      output = topics[arg] || `No manual entry for ${arg || '(nothing)'}`;
+    } else if (op === 'file') {
+      if (!arg) output = 'file: missing operand';
+      else if (isDir(target)) output = `${arg}: directory`;
+      else if (isFile(target)) output = `${arg}: ASCII text`;
+      else output = `${arg}: cannot open (No such file or directory)`;
+    } else if (op === 'cat' || op === 'head') {
+      if (!arg) {
+        output = `${op}: missing operand`;
+      } else if (isDir(target)) {
+        output = `${op}: ${arg}: Is a directory`;
+      } else if (!isFile(target)) {
+        output = `${op}: ${arg}: No such file or directory`;
+      } else {
+        const content = fileSystem[target];
+        output = op === 'head' ? content.split('\n').slice(0, 3).join('\n') : content;
+        if (target === 'config/credentials.txt' && !foundCreds) {
           setFoundCreds(true);
           setProgress(60);
         }
       }
-    } else if (op === 'help') {
-      output = 'Available commands:\n  ls [path]     - list files\n  cat <file>    - display file contents\n  sudo <pass>   - elevate privileges\n  clear         - clear screen\n  help          - show this help';
-    } else if (op === 'sudo') {
-      if (!foundCreds) {
-        output = 'sudo: you must find the credentials first';
-      } else if (arg === 'ctf{w34k_p455w0rd5_4r3_b4d}' || arg === 'ctf{w34k_p455w0rd5_4r3_b4d}'.toLowerCase()) {
-        output = '[+] Authentication successful. Elevating to root.';
-        setTimeout(() => {
-          setStage('escalate');
-          setProgress(80);
-        }, 800);
+    } else if (op === 'grep') {
+      const [pattern, ...fileParts] = parts.slice(1);
+      const fileArg = fileParts.join(' ');
+      const filePath = resolvePath(cwd, fileArg);
+      if (!pattern || !fileArg) {
+        output = 'usage: grep <pattern> <file>';
+      } else if (!isFile(filePath)) {
+        output = `grep: ${fileArg}: No such file or directory`;
       } else {
-        output = 'sudo: incorrect password';
+        const matches = fileSystem[filePath].split('\n').filter((l) => l.toLowerCase().includes(pattern.toLowerCase()));
+        output = matches.length ? matches.join('\n') : '';
+        if (filePath === 'config/credentials.txt' && !foundCreds) {
+          setFoundCreds(true);
+          setProgress(60);
+        }
+      }
+    } else if (op === 'find') {
+      const startDir = resolvePath(cwd, arg);
+      if (!isDir(startDir)) {
+        output = `find: ${arg}: No such directory`;
+      } else {
+        const prefix = startDir ? startDir + '/' : '';
+        output = Object.keys(fileSystem)
+          .filter((k) => k.startsWith(prefix))
+          .map((k) => './' + k.replace(/\/$/, ''))
+          .join('\n');
+      }
+    } else if (op === 'help') {
+      output = 'Available commands:\n  ls [path]      - list files\n  cd [path]      - change directory\n  pwd            - print working directory\n  cat/head <f>   - display file contents\n  grep <p> <f>   - search a file\n  find [path]    - list files recursively\n  file <f>       - identify file type\n  whoami / id    - show current user\n  history        - show past commands\n  man <cmd>      - manual page\n  sudo <cmd>     - elevate privileges (e.g. sudo su)\n  clear          - clear screen\n  help           - show this help';
+    } else if (op === 'sudo') {
+      if (!arg) {
+        output = 'usage: sudo <command>';
+      } else if (!foundCreds) {
+        output = 'sudo: you must find the credentials first';
+      } else {
+        setTerminalOutput((prev) => [...prev, { type: 'cmd', text: `${promptPath()} $ ${cmd}` }]);
+        setSudoPrompt(arg);
+        setCmdHistory((prev) => [...prev, cmd]);
+        setHistoryIndex(-1);
+        setCommand('');
+        return;
       }
     } else if (op === 'clear') {
       setTerminalOutput([]);
@@ -153,8 +285,60 @@ export default function App() {
       output = `${op}: command not found. Type 'help' for available commands.`;
     }
 
-    setTerminalOutput((prev) => [...prev, { type: 'cmd', text: `user@target:~$ ${cmd}` }, { type: 'out', text: output }]);
+    setTerminalOutput((prev) => [...prev, { type: 'cmd', text: `user@target:${promptPath()}$ ${cmd}` }, { type: 'out', text: output }]);
+    setCmdHistory((prev) => [...prev, cmd]);
+    setHistoryIndex(-1);
     setCommand('');
+  };
+
+  const submitSudoPassword = () => {
+    const attempt = command;
+    setCommand('');
+    if (attempt === FLAG) {
+      const rootShells = ['su', '-i', '-s', 'bash', 'sh'];
+      if (rootShells.includes(sudoPrompt)) {
+        setTerminalOutput((prev) => [...prev, { type: 'out', text: '[+] Authentication successful. Elevating to root.' }]);
+        setSudoPrompt(null);
+        setSudoAttempts(0);
+        setTimeout(() => {
+          setStage('escalate');
+          setProgress(80);
+        }, 800);
+      } else {
+        setTerminalOutput((prev) => [...prev, { type: 'out', text: `sudo: ${sudoPrompt}: command not found` }]);
+        setSudoPrompt(null);
+        setSudoAttempts(0);
+      }
+    } else {
+      const attempts = sudoAttempts + 1;
+      if (attempts >= 3) {
+        setTerminalOutput((prev) => [...prev, { type: 'out', text: 'sudo: 3 incorrect password attempts' }]);
+        setSudoPrompt(null);
+        setSudoAttempts(0);
+      } else {
+        setTerminalOutput((prev) => [...prev, { type: 'out', text: 'Sorry, try again.' }]);
+        setSudoAttempts(attempts);
+      }
+    }
+  };
+
+  const handleTerminalKeyDown = (e) => {
+    if (sudoPrompt !== null) {
+      if (e.key === 'Enter') submitSudoPassword();
+      return;
+    }
+    if (e.key === 'Enter') {
+      handleCommand();
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      completeToken();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      navigateHistory(1);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      navigateHistory(-1);
+    }
   };
 
   const runEscalation = (action) => {
@@ -176,6 +360,11 @@ export default function App() {
     setLoginAttempts(0);
     setTerminalOutput([]);
     setCommand('');
+    setCwd('');
+    setCmdHistory([]);
+    setHistoryIndex(-1);
+    setSudoPrompt(null);
+    setSudoAttempts(0);
     setFoundCreds(false);
     setEscalateInput('');
     setEscalated(false);
@@ -467,11 +656,14 @@ export default function App() {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderTop: '1px solid #152942', paddingTop: '12px' }}>
-              <span style={{ color: '#5b9bd5', fontSize: '13px' }}>user@target:~$</span>
+              <span style={{ color: sudoPrompt !== null ? '#fbbf24' : '#5b9bd5', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                {sudoPrompt !== null ? '[sudo] password for user:' : `user@target:${promptPath()}$`}
+              </span>
               <input
                 value={command}
                 onChange={(e) => setCommand(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleCommand()}
+                onKeyDown={handleTerminalKeyDown}
+                type={sudoPrompt !== null ? 'password' : 'text'}
                 autoFocus
                 style={{ flex: 1, background: 'transparent', border: 'none', color: '#c8d4e3', fontFamily: 'inherit', fontSize: '13px', outline: 'none' }}
               />
@@ -483,14 +675,14 @@ export default function App() {
               <div style={{ fontSize: '11px', color: '#5a7090', letterSpacing: '0.2em', marginBottom: '12px' }}>OBJECTIVES</div>
               <div style={{ fontSize: '12px', lineHeight: '1.8' }}>
                 <div style={{ color: foundCreds ? '#4ade80' : '#c8d4e3' }}>{foundCreds ? '✓' : '◯'} Locate credentials file</div>
-                <div style={{ color: '#3a4a66' }}>◯ Use 'sudo' with the discovered password</div>
+                <div style={{ color: '#3a4a66' }}>◯ Run 'sudo su' and enter the password</div>
               </div>
             </div>
 
             <div style={{ background: '#0f1f33', border: '1px solid #1f3354', borderRadius: '4px', padding: '16px' }}>
               <div style={{ fontSize: '11px', color: '#fbbf24', letterSpacing: '0.2em', marginBottom: '10px' }}>⚠ INTEL DROP</div>
               <div style={{ fontSize: '12px', color: '#8da3c0', lineHeight: '1.6' }}>
-                Try <span style={{ color: '#5b9bd5' }}>ls config/</span>. Devs sometimes leave secrets in plain text.
+                Try <span style={{ color: '#5b9bd5' }}>ls config/</span>. Devs sometimes leave secrets in plain text. Tab-complete file names, and use ↑/↓ to reuse past commands.
               </div>
             </div>
 
