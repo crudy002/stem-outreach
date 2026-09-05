@@ -33,6 +33,9 @@ export default function App() {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const terminalRef = useRef(null);
   const commandInputRef = useRef(null);
+  const startButtonRef = useRef(null);
+  const passwordInputRef = useRef(null);
+  const authButtonRef = useRef(null);
 
   useEffect(() => {
     if (terminalRef.current) terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
@@ -84,6 +87,7 @@ export default function App() {
   };
 
   const beginMission = () => {
+    if (!playerName.trim()) return;
     setStartTime(Date.now());
     setStage('login');
     setProgress(20);
@@ -451,7 +455,7 @@ export default function App() {
           <span style={{ fontSize: '11px', color: '#5b9bd5' }}>{progress}%</span>
         </div>
         <div style={{ height: '4px', background: '#152942', borderRadius: '2px', overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${progress}%`, background: 'linear-gradient(90deg, #5b9bd5, #4ade80)', transition: 'width 0.6s ease' }}></div>
+          <div style={{ height: '100%', width: `${progress}%`, background: 'linear-gradient(90deg, #5b9bd5, #4ade80)', transition: progress === 0 ? 'none' : 'width 0.6s ease' }}></div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', fontSize: '10px' }}>
           <span style={{ color: !['start', 'login'].includes(stage) ? '#4ade80' : stage === 'login' ? '#fbbf24' : '#3a4a66' }}>● BREACH ACCESS</span>
@@ -485,7 +489,10 @@ export default function App() {
               <input
                 value={playerName}
                 onChange={(e) => setPlayerName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && beginMission()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') beginMission();
+                  else if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); startButtonRef.current?.focus(); }
+                }}
                 maxLength={40}
                 autoFocus
                 style={{
@@ -506,8 +513,8 @@ export default function App() {
             </div>
 
             <button
+              ref={startButtonRef}
               onClick={beginMission}
-              disabled={!playerName.trim()}
               style={{
                 width: '100%',
                 background: 'linear-gradient(180deg, #152942 0%, #0f1f33 100%)',
@@ -520,7 +527,10 @@ export default function App() {
                 fontWeight: 'bold',
                 cursor: playerName.trim() ? 'pointer' : 'not-allowed',
                 borderRadius: '2px',
+                outline: 'none',
               }}
+              onFocus={(e) => { e.target.style.borderColor = '#4ade80'; e.target.style.boxShadow = '0 0 0 2px rgba(74, 222, 128, 0.4)'; }}
+              onBlur={(e) => { e.target.style.borderColor = '#5b9bd5'; e.target.style.boxShadow = 'none'; }}
             >
               ▶ START MISSION
             </button>
@@ -554,7 +564,10 @@ export default function App() {
               <input
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && tryLogin()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') tryLogin();
+                  else if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); passwordInputRef.current?.focus(); }
+                }}
                 style={{
                   width: '100%',
                   background: '#081320',
@@ -574,10 +587,14 @@ export default function App() {
             <div style={{ marginBottom: '24px' }}>
               <div style={{ fontSize: '10px', color: '#5a7090', letterSpacing: '0.2em', marginBottom: '6px' }}>PASSWORD</div>
               <input
+                ref={passwordInputRef}
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && tryLogin()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') tryLogin();
+                  else if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); authButtonRef.current?.focus(); }
+                }}
                 style={{
                   width: '100%',
                   background: '#081320',
@@ -596,6 +613,7 @@ export default function App() {
             </div>
 
             <button
+              ref={authButtonRef}
               onClick={tryLogin}
               style={{
                 width: '100%',
@@ -609,7 +627,10 @@ export default function App() {
                 fontWeight: 'bold',
                 cursor: 'pointer',
                 borderRadius: '2px',
+                outline: 'none',
               }}
+              onFocus={(e) => { e.target.style.borderColor = '#4ade80'; e.target.style.boxShadow = '0 0 0 2px rgba(74, 222, 128, 0.4)'; }}
+              onBlur={(e) => { e.target.style.borderColor = '#5b9bd5'; e.target.style.boxShadow = 'none'; }}
             >
               ▶ AUTHENTICATE
             </button>
