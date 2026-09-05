@@ -32,10 +32,15 @@ export default function App() {
   const [leaderboardError, setLeaderboardError] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const terminalRef = useRef(null);
+  const commandInputRef = useRef(null);
 
   useEffect(() => {
     if (terminalRef.current) terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
   }, [terminalOutput]);
+
+  useEffect(() => {
+    if (stage === 'filesystem' && commandInputRef.current) commandInputRef.current.focus();
+  }, [stage]);
 
   const fetchLeaderboard = () => {
     fetch(`${API_BASE}/scores?limit=10`)
@@ -639,13 +644,16 @@ export default function App() {
       {/* Stage: FILESYSTEM */}
       {stage === 'filesystem' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '20px' }}>
-          <div style={{ background: '#081320', border: '1px solid #1f3354', borderRadius: '4px', padding: '20px', minHeight: '480px', display: 'flex', flexDirection: 'column' }}>
+          <div
+            onClick={() => commandInputRef.current && commandInputRef.current.focus()}
+            style={{ background: '#081320', border: '1px solid #1f3354', borderRadius: '4px', padding: '20px', height: '480px', display: 'flex', flexDirection: 'column' }}
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '14px', paddingBottom: '10px', borderBottom: '1px solid #152942' }}>
               <span style={{ fontSize: '11px', color: '#5a7090', letterSpacing: '0.2em' }}>SHELL // user@target</span>
               <span style={{ fontSize: '11px', color: '#4ade80' }}>● CONNECTED</span>
             </div>
 
-            <div ref={terminalRef} style={{ flex: 1, overflowY: 'auto', fontSize: '12.5px', lineHeight: '1.7', color: '#c8d4e3', whiteSpace: 'pre-wrap', marginBottom: '12px' }}>
+            <div ref={terminalRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', fontSize: '12.5px', lineHeight: '1.7', color: '#c8d4e3', whiteSpace: 'pre-wrap', marginBottom: '12px' }}>
               <div style={{ color: '#5a7090', marginBottom: '10px' }}>
                 Welcome to TARGET-01. Type 'help' for available commands.{'\n'}
                 Hint: try 'ls' to see what's around.
@@ -660,6 +668,7 @@ export default function App() {
                 {sudoPrompt !== null ? '[sudo] password for user:' : `user@target:${promptPath()}$`}
               </span>
               <input
+                ref={commandInputRef}
                 value={command}
                 onChange={(e) => setCommand(e.target.value)}
                 onKeyDown={handleTerminalKeyDown}
