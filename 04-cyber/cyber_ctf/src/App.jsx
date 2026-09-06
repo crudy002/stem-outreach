@@ -26,6 +26,7 @@ export default function App() {
   const [escalated, setEscalated] = useState(false);
   const [progress, setProgress] = useState(0);
   const [startTime, setStartTime] = useState(null);
+  const [rootReachedAt, setRootReachedAt] = useState(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(null);
   const [submitStatus, setSubmitStatus] = useState('idle'); // idle, submitting, done, error
   const [rank, setRank] = useState(null);
@@ -39,7 +40,7 @@ export default function App() {
   const terminal = useTerminal({
     playerName,
     onCredentialsFound: () => setProgress(60),
-    onRootAccess: () => { setStage('escalate'); setProgress(80); },
+    onRootAccess: () => { setStage('escalate'); setProgress(80); setRootReachedAt(Date.now()); },
   });
   const { foundCreds, assisted, commandInputRef } = terminal;
 
@@ -108,7 +109,10 @@ export default function App() {
 
   const runEscalation = (action) => {
     if (action === 'inject') {
-      const elapsed = startTime ? (Date.now() - startTime) / 1000 : null;
+      // Locked at root access, not at this click — the timed skill is
+      // breach → creds → escalate; exploring the escalate-screen flavor
+      // actions afterward shouldn't cost leaderboard time.
+      const elapsed = startTime && rootReachedAt ? (rootReachedAt - startTime) / 1000 : null;
       setEscalated(true);
       setStage('hacked');
       setProgress(100);
@@ -128,6 +132,7 @@ export default function App() {
     setEscalated(false);
     setProgress(0);
     setStartTime(null);
+    setRootReachedAt(null);
     setElapsedSeconds(null);
     setSubmitStatus('idle');
     setRank(null);
@@ -197,7 +202,11 @@ export default function App() {
         />
       )}
 
-      <ElapsedTimer startTime={startTime} running={['login', 'filesystem', 'escalate'].includes(stage)} />
+      <ElapsedTimer
+        startTime={startTime}
+        running={['login', 'filesystem'].includes(stage)}
+        lockedMs={stage === 'escalate' && rootReachedAt ? rootReachedAt - startTime : null}
+      />
 
       {/* Mission progress */}
       <div style={{ background: '#0f1f33', border: '1px solid #1f3354', borderRadius: '4px', padding: '14px 18px', marginBottom: '20px' }}>

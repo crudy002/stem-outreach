@@ -1,6 +1,11 @@
 import { useState } from 'react';
+import { LogsOverlay } from './LogsOverlay';
+import { ExfilOverlay } from './ExfilOverlay';
+import { DeployOverlay } from './DeployOverlay';
 
 export function EscalateScreen({ onInject }) {
+  const [activePanel, setActivePanel] = useState(null); // null | 'logs' | 'exfil' | 'inject'
+
   return (
     <div style={{ background: '#081320', border: '1px solid #1f3354', borderRadius: '4px', padding: '32px', minHeight: '480px' }}>
       <div style={{ textAlign: 'center', marginBottom: '24px' }}>
@@ -20,15 +25,19 @@ export function EscalateScreen({ onInject }) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px', maxWidth: '720px', margin: '0 auto' }}>
-        <ActionButton label="VIEW LOGS" sub="Read-only inspection" color="#8da3c0" onClick={() => alert('Safe action — logs displayed.')} />
-        <ActionButton label="DOWNLOAD DATA" sub="Exfiltrate sensitive files" color="#fbbf24" onClick={() => alert('You exfiltrated data. In a real attack, this is data theft.')} />
-        <ActionButton label="INJECT PAYLOAD" sub="Deploy malicious code" color="#ef4444" pulse onClick={onInject} />
+        <ActionButton label="VIEW LOGS" sub="Read-only inspection" color="#8da3c0" onClick={() => setActivePanel('logs')} />
+        <ActionButton label="DOWNLOAD DATA" sub="Exfiltrate sensitive files" color="#fbbf24" onClick={() => setActivePanel('exfil')} />
+        <ActionButton label="INJECT PAYLOAD" sub="Deploy malicious code" color="#ef4444" pulse onClick={() => setActivePanel('inject')} />
       </div>
 
       <div style={{ marginTop: '32px', fontSize: '11px', color: '#5a7090', textAlign: 'center', lineHeight: '1.6' }}>
         In a real engagement, defenders would see this activity in logs.<br/>
         Detection &gt; Prevention &gt; Response — that's why monitoring matters.
       </div>
+
+      {activePanel === 'logs' && <LogsOverlay onClose={() => setActivePanel(null)} />}
+      {activePanel === 'exfil' && <ExfilOverlay onClose={() => setActivePanel(null)} />}
+      {activePanel === 'inject' && <DeployOverlay onComplete={onInject} />}
     </div>
   );
 }
