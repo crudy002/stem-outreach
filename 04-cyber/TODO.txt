@@ -4,3 +4,17 @@
 
 
 - Add some more graphics/animations for things like exfil/download data
+
+
+- Leaderboard API hardening/roadmap (see leaderboard-api/main.py, App.jsx)
+    - protect DELETE /scores with a shared secret before running on any WiFi
+      we don't fully control (currently open to anyone on the network)
+    - actually run the shared-host setup if we ever have multiple Pi
+      stations at once (station_id + VITE_STATION_ID are already wired,
+      just need one machine as the shared API host on the booth LAN)
+    - tag runs with an event/session id instead of hard-wiping via
+      DELETE /scores, so history persists across multiple outreach events
+    - add a spectator/big-screen leaderboard view (read-only page polling
+      GET /scores) for booth ambiance
+    - add a GET /stats endpoint (plays, completion rate, avg/fastest time)
+      for reporting event impact to schools/funders
