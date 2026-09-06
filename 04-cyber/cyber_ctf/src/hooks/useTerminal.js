@@ -38,6 +38,32 @@ const resolvePath = (base, input) => {
   return parts.join('/');
 };
 
+// Nested tree view of fileSystem for the easy-mode file browser sidebar, so
+// that UI stays decoupled from the flat slash-key convention used above.
+const buildFileTree = () => {
+  const root = { type: 'dir', name: '', path: '', children: {} };
+  for (const key of Object.keys(fileSystem)) {
+    const isDirEntry = key.endsWith('/');
+    const parts = (isDirEntry ? key.slice(0, -1) : key).split('/');
+    let node = root;
+    parts.forEach((part, i) => {
+      const isLast = i === parts.length - 1;
+      if (!node.children[part]) {
+        node.children[part] = {
+          type: isLast && !isDirEntry ? 'file' : 'dir',
+          name: part,
+          path: parts.slice(0, i + 1).join('/'),
+          children: {},
+        };
+      }
+      node = node.children[part];
+    });
+  }
+  return root;
+};
+
+export const FILE_TREE = buildFileTree();
+
 // Drives the simulated shell used in the FILESYSTEM/ESCALATE stages: command
 // parsing, tab completion, history, and the sudo password prompt. Reports
 // mission milestones back to the caller via onCredentialsFound/onRootAccess
@@ -220,6 +246,32 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
     setCommand('');
   };
 
+  // Easy-mode file browser: clicking a file "cats" it without requiring the
+  // player to type the command themselves.
+  const viewFile = (path) => {
+    if (!isFile(path)) return;
+    const cmdText = `cat ${path}`;
+    const content = fileSystem[path];
+    const hasFlag = content.includes(FLAG);
+    setTerminalOutput((prev) => [...prev, { type: 'cmd', text: `admin@target:${promptPath()}$ ${cmdText}` }, { type: 'out', text: content, flag: hasFlag }]);
+    setCmdHistory((prev) => [...prev, cmdText]);
+    setHistoryIndex(-1);
+    if (path === 'config/credentials.txt') markCredsFound();
+  };
+
+  // Easy-mode one-click root: skips manually typing "sudo su" and pasting
+  // the flag back in as the password.
+  const unlockRoot = () => {
+    if (!foundCreds || sudoPrompt !== null) return;
+    setTerminalOutput((prev) => [...prev, { type: 'cmd', text: `admin@target:${promptPath()}$ sudo su` }]);
+    setCmdHistory((prev) => [...prev, 'sudo su']);
+    setHistoryIndex(-1);
+    setTimeout(() => {
+      setTerminalOutput((prev) => [...prev, { type: 'out', text: '[+] Authentication successful. Elevating to root.' }]);
+      setTimeout(() => onRootAccess?.(), 800);
+    }, 500);
+  };
+
   const fallbackCopy = (text, onDone) => {
     const ta = document.createElement('textarea');
     ta.value = text;
@@ -313,6 +365,8 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
     promptPath,
     handleTerminalKeyDown,
     copyToClipboard,
+    viewFile,
+    unlockRoot,
     reset,
   };
 }

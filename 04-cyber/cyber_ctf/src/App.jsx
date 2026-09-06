@@ -15,6 +15,7 @@ const STATION_ID = import.meta.env.VITE_STATION_ID || null;
 
 export default function App() {
   const [stage, setStage] = useState('start'); // start, login, filesystem, escalate, hacked, victory
+  const [mode, setMode] = useState('easy'); // easy: click-to-explore + one-click root. hard: type every command.
   const [playerName, setPlayerName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -213,7 +214,7 @@ export default function App() {
       </div>
 
       {stage === 'start' && (
-        <StartScreen playerName={playerName} setPlayerName={setPlayerName} onBegin={beginMission} startButtonRef={startButtonRef} />
+        <StartScreen playerName={playerName} setPlayerName={setPlayerName} mode={mode} setMode={setMode} onBegin={beginMission} startButtonRef={startButtonRef} />
       )}
 
       {stage === 'login' && (
@@ -230,7 +231,7 @@ export default function App() {
         />
       )}
 
-      {stage === 'filesystem' && <FilesystemScreen terminal={terminal} />}
+      {stage === 'filesystem' && <FilesystemScreen terminal={terminal} mode={mode} />}
 
       {stage === 'escalate' && <EscalateScreen onInject={() => runEscalation('inject')} />}
 

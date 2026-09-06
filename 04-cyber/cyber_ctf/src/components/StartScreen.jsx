@@ -1,4 +1,4 @@
-export function StartScreen({ playerName, setPlayerName, onBegin, startButtonRef }) {
+export function StartScreen({ playerName, setPlayerName, mode, setMode, onBegin, startButtonRef }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'center' }}>
       <div style={{ background: '#0f1f33', border: '1px solid #1f3354', borderRadius: '4px', padding: '36px', maxWidth: '480px', width: '100%' }}>
@@ -45,6 +45,14 @@ export function StartScreen({ playerName, setPlayerName, onBegin, startButtonRef
           />
         </div>
 
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{ fontSize: '10px', color: '#5a7090', letterSpacing: '0.2em', marginBottom: '6px' }}>DIFFICULTY</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <ModeButton label="EASY" sub="Guided, click-to-explore" active={mode === 'easy'} onClick={() => setMode('easy')} />
+            <ModeButton label="HARD" sub="Type every command" active={mode === 'hard'} onClick={() => setMode('hard')} />
+          </div>
+        </div>
+
         <button
           ref={startButtonRef}
           onClick={onBegin}
@@ -69,5 +77,26 @@ export function StartScreen({ playerName, setPlayerName, onBegin, startButtonRef
         </button>
       </div>
     </div>
+  );
+}
+
+function ModeButton({ label, sub, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background: active ? '#152942' : 'transparent',
+        border: `1px solid ${active ? '#5b9bd5' : '#2a4870'}`,
+        color: active ? '#5b9bd5' : '#5a7090',
+        padding: '10px 8px',
+        fontFamily: 'inherit',
+        cursor: 'pointer',
+        borderRadius: '2px',
+        textAlign: 'center',
+      }}
+    >
+      <div style={{ fontSize: '12px', fontWeight: 'bold', letterSpacing: '0.15em', marginBottom: '4px' }}>{label}</div>
+      <div style={{ fontSize: '9px', opacity: 0.8 }}>{sub}</div>
+    </button>
   );
 }
