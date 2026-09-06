@@ -12,6 +12,11 @@ const fileSystem = {
 };
 const FLAG = 'ctf{w34k_p455w0rd5_4r3_b4d}';
 const COMMANDS = ['ls', 'cat', 'cd', 'pwd', 'whoami', 'id', 'head', 'file', 'find', 'grep', 'man', 'history', 'sudo', 'clear', 'help'];
+// How many failed commands/sudo attempts before we offer the "call for
+// backup" escape hatch, so nobody gets stuck at the booth indefinitely.
+const STRUGGLE_THRESHOLD = 4;
+const isFailureOutput = (output) =>
+  typeof output === 'string' && /not found|No such|missing operand|^usage:|must find the credentials|Is a directory/i.test(output);
 
 const isDir = (p) => p === '' || fileSystem[p + '/'] !== undefined;
 const isFile = (p) => fileSystem[p] !== undefined && fileSystem[p] !== null;
@@ -78,6 +83,8 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
   const [sudoAttempts, setSudoAttempts] = useState(0);
   const [copiedFlag, setCopiedFlag] = useState(false);
   const [foundCreds, setFoundCreds] = useState(false);
+  const [errorCount, setErrorCount] = useState(0);
+  const [assisted, setAssisted] = useState(false);
   const terminalRef = useRef(null);
   const commandInputRef = useRef(null);
 
@@ -240,6 +247,7 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
     }
 
     const hasFlag = typeof output === 'string' && output.includes(FLAG);
+    if (isFailureOutput(output)) setErrorCount((c) => c + 1);
     setTerminalOutput((prev) => [...prev, { type: 'cmd', text: `admin@target:${promptPath()}$ ${cmd}` }, { type: 'out', text: output, flag: hasFlag }]);
     setCmdHistory((prev) => [...prev, cmd]);
     setHistoryIndex(-1);
@@ -270,6 +278,36 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
       setTerminalOutput((prev) => [...prev, { type: 'out', text: '[+] Authentication successful. Elevating to root.' }]);
       setTimeout(() => onRootAccess?.(), 800);
     }, 500);
+  };
+
+  // Escape hatch for players who are out of their depth: after enough failed
+  // commands/sudo attempts, HQ "takes over" and plays out the rest of the
+  // mission for them so nobody gets stuck at the booth. Marked `assisted` so
+  // the caller can keep this run off the leaderboard.
+  const callForBackup = () => {
+    setAssisted(true);
+    setSudoPrompt(null);
+    const hadCreds = foundCreds;
+    setTerminalOutput((prev) => [...prev, { type: 'out', text: '📡 HQ: Patching you through to a senior operator...' }]);
+
+    const doUnlock = () => {
+      setTerminalOutput((prev) => [...prev, { type: 'cmd', text: `admin@target:${promptPath()}$ sudo su` }]);
+      setTimeout(() => {
+        setTerminalOutput((prev) => [...prev, { type: 'out', text: '[+] Authentication successful. Elevating to root.' }]);
+        setTimeout(() => onRootAccess?.(), 800);
+      }, 500);
+    };
+
+    if (hadCreds) {
+      setTimeout(doUnlock, 900);
+    } else {
+      setTimeout(() => {
+        setTerminalOutput((prev) => [...prev, { type: 'cmd', text: `admin@target:${promptPath()}$ cat config/credentials.txt` }, { type: 'out', text: fileSystem['config/credentials.txt'] }]);
+        setFoundCreds(true);
+        onCredentialsFound?.();
+        setTimeout(doUnlock, 900);
+      }, 900);
+    }
   };
 
   const fallbackCopy = (text, onDone) => {
@@ -307,9 +345,11 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
         setTerminalOutput((prev) => [...prev, { type: 'out', text: `sudo: ${sudoPrompt}: command not found` }]);
         setSudoPrompt(null);
         setSudoAttempts(0);
+        setErrorCount((c) => c + 1);
       }
     } else {
       const attempts = sudoAttempts + 1;
+      setErrorCount((c) => c + 1);
       if (attempts >= 3) {
         setTerminalOutput((prev) => [...prev, { type: 'out', text: 'sudo: 3 incorrect password attempts' }]);
         setSudoPrompt(null);
@@ -349,6 +389,8 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
     setSudoPrompt(null);
     setSudoAttempts(0);
     setFoundCreds(false);
+    setErrorCount(0);
+    setAssisted(false);
   };
 
   return {
@@ -360,6 +402,8 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
     foundCreds,
     sudoPrompt,
     copiedFlag,
+    assisted,
+    strugglingBadly: errorCount >= STRUGGLE_THRESHOLD,
     terminalRef,
     commandInputRef,
     promptPath,
@@ -367,6 +411,7 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
     copyToClipboard,
     viewFile,
     unlockRoot,
+    callForBackup,
     reset,
   };
 }

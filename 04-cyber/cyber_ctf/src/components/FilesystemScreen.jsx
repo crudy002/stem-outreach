@@ -17,6 +17,9 @@ export function FilesystemScreen({ terminal, mode }) {
     copyToClipboard,
     viewFile,
     unlockRoot,
+    assisted,
+    strugglingBadly,
+    callForBackup,
   } = terminal;
   const easy = mode === 'easy';
 
@@ -84,6 +87,21 @@ export function FilesystemScreen({ terminal, mode }) {
             <div style={{ color: foundCreds ? '#fbbf24' : '#3a4a66' }}>◯ Run 'sudo su' and enter the password</div>
           </div>
         </div>
+
+        {strugglingBadly && !assisted && (
+          <div style={{ background: '#1a1408', border: '1px solid #7a5a10', borderRadius: '4px', padding: '16px' }}>
+            <div style={{ fontSize: '11px', color: '#fbbf24', letterSpacing: '0.2em', marginBottom: '8px' }}>📡 STUCK?</div>
+            <div style={{ fontSize: '12px', color: '#c8b088', lineHeight: '1.6', marginBottom: '10px' }}>
+              HQ can take over and finish the mission for you. You'll still see it through — this run just won't count for the leaderboard.
+            </div>
+            <button
+              onClick={callForBackup}
+              style={{ width: '100%', background: 'transparent', border: '1px solid #fbbf24', color: '#fbbf24', padding: '8px 12px', fontFamily: 'inherit', fontSize: '10px', letterSpacing: '0.15em', cursor: 'pointer', borderRadius: '2px' }}
+            >
+              CALL FOR BACKUP
+            </button>
+          </div>
+        )}
 
         <div style={{ background: '#0f1f33', border: '1px solid #1f3354', borderRadius: '4px', padding: '16px' }}>
           <div style={{ fontSize: '11px', color: '#fbbf24', letterSpacing: '0.2em', marginBottom: '10px' }}>⚠ INTEL DROP</div>

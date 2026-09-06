@@ -1,4 +1,4 @@
-export function HackedScreen({ elapsedSeconds, submitStatus, rank, onViewLeaderboard, onReset }) {
+export function HackedScreen({ elapsedSeconds, submitStatus, assisted, rank, onViewLeaderboard, onReset }) {
   return (
     <div style={{
       background: 'radial-gradient(circle at center, #1a0408 0%, #0a1628 100%)',
@@ -48,9 +48,10 @@ export function HackedScreen({ elapsedSeconds, submitStatus, rank, onViewLeaderb
             {elapsedSeconds !== null ? `${elapsedSeconds.toFixed(1)}s` : '—'}
           </div>
           <div style={{ fontSize: '11px', color: '#8da3c0', marginTop: '6px' }}>
-            {submitStatus === 'submitting' && 'Submitting to leaderboard…'}
-            {submitStatus === 'done' && rank && `Ranked #${rank} on the leaderboard`}
-            {submitStatus === 'error' && 'Could not reach the leaderboard server — score not recorded.'}
+            {assisted && '📡 Backup-assisted run — not eligible for the leaderboard.'}
+            {!assisted && submitStatus === 'submitting' && 'Submitting to leaderboard…'}
+            {!assisted && submitStatus === 'done' && rank && `Ranked #${rank} on the leaderboard`}
+            {!assisted && submitStatus === 'error' && 'Could not reach the leaderboard server — score not recorded.'}
           </div>
           <button
             onClick={onViewLeaderboard}

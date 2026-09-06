@@ -40,7 +40,7 @@ export default function App() {
     onCredentialsFound: () => setProgress(60),
     onRootAccess: () => { setStage('escalate'); setProgress(80); },
   });
-  const { foundCreds, commandInputRef } = terminal;
+  const { foundCreds, assisted, commandInputRef } = terminal;
 
   useEffect(() => {
     if (stage === 'filesystem' && commandInputRef.current) commandInputRef.current.focus();
@@ -112,7 +112,7 @@ export default function App() {
       setStage('hacked');
       setProgress(100);
       setElapsedSeconds(elapsed);
-      if (elapsed !== null) submitScore(elapsed);
+      if (elapsed !== null && !assisted) submitScore(elapsed);
     }
   };
 
@@ -239,6 +239,7 @@ export default function App() {
         <HackedScreen
           elapsedSeconds={elapsedSeconds}
           submitStatus={submitStatus}
+          assisted={assisted}
           rank={rank}
           onViewLeaderboard={openLeaderboard}
           onReset={reset}
