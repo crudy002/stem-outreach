@@ -6,6 +6,7 @@ import { FilesystemScreen } from './components/FilesystemScreen';
 import { EscalateScreen } from './components/EscalateScreen';
 import { HackedScreen } from './components/HackedScreen';
 import { LeaderboardModal } from './components/LeaderboardModal';
+import { ElapsedTimer } from './components/ElapsedTimer';
 
 // The leaderboard API runs standalone (see ../leaderboard-api) and defaults
 // to localhost:8000. Override with VITE_LEADERBOARD_API_URL when the API is
@@ -195,6 +196,8 @@ export default function App() {
           onClose={() => setShowLeaderboard(false)}
         />
       )}
+
+      <ElapsedTimer startTime={startTime} running={['login', 'filesystem', 'escalate'].includes(stage)} />
 
       {/* Mission progress */}
       <div style={{ background: '#0f1f33', border: '1px solid #1f3354', borderRadius: '4px', padding: '14px 18px', marginBottom: '20px' }}>
