@@ -5,6 +5,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { FilesystemScreen } from './components/FilesystemScreen';
 import { EscalateScreen } from './components/EscalateScreen';
 import { HackedScreen } from './components/HackedScreen';
+import { IntroOverlay } from './components/IntroOverlay';
 import { LeaderboardModal } from './components/LeaderboardModal';
 import { ElapsedTimer } from './components/ElapsedTimer';
 
@@ -91,6 +92,10 @@ export default function App() {
 
   const beginMission = () => {
     if (!playerName.trim()) return;
+    setStage('intro');
+  };
+
+  const launchMission = () => {
     setStartTime(Date.now());
     setStage('login');
     setProgress(20);
@@ -218,7 +223,7 @@ export default function App() {
           <div style={{ height: '100%', width: `${progress}%`, background: 'linear-gradient(90deg, #5b9bd5, #4ade80)', transition: progress === 0 ? 'none' : 'width 0.6s ease' }}></div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', fontSize: '10px' }}>
-          <span style={{ color: !['start', 'login'].includes(stage) ? '#4ade80' : stage === 'login' ? '#fbbf24' : '#3a4a66' }}>● BREACH ACCESS</span>
+          <span style={{ color: !['start', 'intro', 'login'].includes(stage) ? '#4ade80' : stage === 'login' ? '#fbbf24' : '#3a4a66' }}>● BREACH ACCESS</span>
           <span style={{ color: foundCreds ? '#4ade80' : stage === 'filesystem' ? '#fbbf24' : '#3a4a66' }}>● FIND CREDENTIALS</span>
           <span style={{ color: stage === 'escalate' || stage === 'hacked' ? '#4ade80' : '#3a4a66' }}>● ESCALATE PRIVILEGES</span>
           <span style={{ color: stage === 'hacked' ? '#4ade80' : '#3a4a66' }}>● DEPLOY PAYLOAD</span>
@@ -228,6 +233,8 @@ export default function App() {
       {stage === 'start' && (
         <StartScreen playerName={playerName} setPlayerName={setPlayerName} mode={mode} setMode={setMode} onBegin={beginMission} startButtonRef={startButtonRef} />
       )}
+
+      {stage === 'intro' && <IntroOverlay playerName={playerName} onComplete={launchMission} />}
 
       {stage === 'login' && (
         <LoginScreen
