@@ -82,11 +82,13 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
   const [sudoPrompt, setSudoPrompt] = useState(null); // null, or the pending sudo arg (e.g. "su")
   const [sudoAttempts, setSudoAttempts] = useState(0);
   const [copiedFlag, setCopiedFlag] = useState(false);
+  const [hasCopiedFlag, setHasCopiedFlag] = useState(false);
   const [foundCreds, setFoundCreds] = useState(false);
   const [errorCount, setErrorCount] = useState(0);
   const [assisted, setAssisted] = useState(false);
   const terminalRef = useRef(null);
   const commandInputRef = useRef(null);
+  const passwordLineIndexRef = useRef(0);
 
   useEffect(() => {
     if (terminalRef.current) terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
@@ -267,17 +269,49 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
     if (path === 'config/credentials.txt') markCredsFound();
   };
 
-  // Easy-mode one-click root: skips manually typing "sudo su" and pasting
-  // the flag back in as the password.
+  // Types a masked password into the terminal one character at a time —
+  // used by both the manual unlock button and the assisted "call for
+  // backup" flow, so the copied credential visibly lands in the prompt
+  // instead of just appearing pre-filled.
+  const typeMaskedPassword = (onDone, dots = 10) => {
+    const prefix = '[sudo] password for admin: ';
+    setTerminalOutput((prev) => {
+      passwordLineIndexRef.current = prev.length;
+      return [...prev, { type: 'out', text: prefix }];
+    });
+    let typed = 0;
+    const interval = setInterval(() => {
+      typed += 1;
+      setTerminalOutput((prev) => {
+        const idx = passwordLineIndexRef.current;
+        if (!prev[idx]) return prev;
+        const next = [...prev];
+        next[idx] = { ...next[idx], text: prefix + '•'.repeat(typed) };
+        return next;
+      });
+      if (typed >= dots) {
+        clearInterval(interval);
+        onDone();
+      }
+    }, 110);
+  };
+
+  // Easy-mode one-click root: skips manually typing "sudo su", but still
+  // types the copied password into the prompt so the copy step a moment
+  // ago visibly pays off instead of being pointless.
   const unlockRoot = () => {
     if (!foundCreds || sudoPrompt !== null) return;
     setTerminalOutput((prev) => [...prev, { type: 'cmd', text: `admin@target:${promptPath()}$ sudo su` }]);
     setCmdHistory((prev) => [...prev, 'sudo su']);
     setHistoryIndex(-1);
     setTimeout(() => {
-      setTerminalOutput((prev) => [...prev, { type: 'out', text: '[+] Authentication successful. Elevating to root.' }]);
-      setTimeout(() => onRootAccess?.(), 800);
-    }, 500);
+      typeMaskedPassword(() => {
+        setTimeout(() => {
+          setTerminalOutput((prev) => [...prev, { type: 'out', text: '[+] Authentication successful. Elevating to root...' }]);
+          setTimeout(() => onRootAccess?.(), 800);
+        }, 400);
+      });
+    }, 450);
   };
 
   // Escape hatch for players who are out of their depth: after enough failed
@@ -293,9 +327,13 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
     const doUnlock = () => {
       setTerminalOutput((prev) => [...prev, { type: 'cmd', text: `admin@target:${promptPath()}$ sudo su` }]);
       setTimeout(() => {
-        setTerminalOutput((prev) => [...prev, { type: 'out', text: '[+] Authentication successful. Elevating to root.' }]);
-        setTimeout(() => onRootAccess?.(), 800);
-      }, 500);
+        typeMaskedPassword(() => {
+          setTimeout(() => {
+            setTerminalOutput((prev) => [...prev, { type: 'out', text: '[+] Authentication successful. Elevating to root...' }]);
+            setTimeout(() => onRootAccess?.(), 800);
+          }, 400);
+        });
+      }, 400);
     };
 
     if (hadCreds) {
@@ -323,7 +361,7 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
   };
 
   const copyToClipboard = (text) => {
-    const flash = () => { setCopiedFlag(true); setTimeout(() => setCopiedFlag(false), 1500); };
+    const flash = () => { setCopiedFlag(true); setHasCopiedFlag(true); setTimeout(() => setCopiedFlag(false), 1500); };
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(text).then(flash).catch(() => fallbackCopy(text, flash));
     } else {
@@ -391,6 +429,8 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
     setFoundCreds(false);
     setErrorCount(0);
     setAssisted(false);
+    setCopiedFlag(false);
+    setHasCopiedFlag(false);
   };
 
   return {
@@ -402,6 +442,7 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
     foundCreds,
     sudoPrompt,
     copiedFlag,
+    hasCopiedFlag,
     assisted,
     strugglingBadly: errorCount >= STRUGGLE_THRESHOLD,
     terminalRef,

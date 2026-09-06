@@ -10,6 +10,7 @@ export function FilesystemScreen({ terminal, mode }) {
     foundCreds,
     sudoPrompt,
     copiedFlag,
+    hasCopiedFlag,
     terminalRef,
     commandInputRef,
     promptPath,
@@ -53,7 +54,11 @@ export function FilesystemScreen({ terminal, mode }) {
                 <div style={{ marginTop: '6px' }}>
                   <button
                     onClick={() => copyToClipboard(FLAG)}
-                    style={{ background: 'transparent', border: '1px solid #2a4870', color: copiedFlag ? '#4ade80' : '#5b9bd5', padding: '4px 10px', fontFamily: 'inherit', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', borderRadius: '2px' }}
+                    style={{
+                      background: 'transparent', border: '1px solid #2a4870', color: copiedFlag ? '#4ade80' : '#5b9bd5',
+                      padding: '4px 10px', fontFamily: 'inherit', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', borderRadius: '2px',
+                      animation: (easy && !hasCopiedFlag) ? 'pulse-warn 1.3s infinite' : 'none',
+                    }}
                   >
                     {copiedFlag ? '✓ Copied!' : '📋 Copy Flag'}
                   </button>
@@ -108,7 +113,7 @@ export function FilesystemScreen({ terminal, mode }) {
           {!foundCreds ? (
             <div style={{ fontSize: '12px', color: '#8da3c0', lineHeight: '1.6' }}>
               {easy ? (
-                <>Click through the files on the left. Devs sometimes leave secrets in plain text.</>
+                <>Open the folders. One file's hiding something it shouldn't.</>
               ) : (
                 <>Try <span style={{ color: '#5b9bd5' }}>ls config/</span>. Devs sometimes leave secrets in plain text. Tab-complete file names, and use ↑/↓ to reuse past commands.</>
               )}
@@ -116,11 +121,11 @@ export function FilesystemScreen({ terminal, mode }) {
           ) : (
             <div style={{ fontSize: '12px', color: '#8da3c0', lineHeight: '1.6' }}>
               {easy ? (
-                <>Found the password. Ready to escalate to root?</>
+                hasCopiedFlag ? <>Password copied. Escalate?</> : <>Copy the password above first.</>
               ) : (
                 <>Got the password? Use the <span style={{ color: '#5b9bd5' }}>📋 Copy Flag</span> button on that output, then run <span style={{ color: '#5b9bd5' }}>sudo su</span> and paste it (Ctrl/Cmd+V) when prompted.</>
               )}
-              {sudoPrompt === null && (
+              {sudoPrompt === null && (!easy || hasCopiedFlag) && (
                 <button
                   onClick={(e) => { e.stopPropagation(); easy ? unlockRoot() : fillInSudo(); }}
                   style={{ display: 'block', marginTop: '10px', background: 'transparent', border: '1px solid #2a4870', color: '#5b9bd5', padding: '6px 12px', fontFamily: 'inherit', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', borderRadius: '2px' }}
@@ -132,12 +137,14 @@ export function FilesystemScreen({ terminal, mode }) {
           )}
         </div>
 
-        <div style={{ background: '#0f1f33', border: '1px solid #1f3354', borderRadius: '4px', padding: '16px' }}>
-          <div style={{ fontSize: '11px', color: '#5a7090', letterSpacing: '0.2em', marginBottom: '10px' }}>LESSON</div>
-          <div style={{ fontSize: '11px', color: '#8da3c0', lineHeight: '1.6' }}>
-            Real breaches often start with secrets accidentally committed to code. Tools like git-secrets and pre-commit hooks catch these before they ship.
+        {!easy && (
+          <div style={{ background: '#0f1f33', border: '1px solid #1f3354', borderRadius: '4px', padding: '16px' }}>
+            <div style={{ fontSize: '11px', color: '#5a7090', letterSpacing: '0.2em', marginBottom: '10px' }}>LESSON</div>
+            <div style={{ fontSize: '11px', color: '#8da3c0', lineHeight: '1.6' }}>
+              Real breaches often start with secrets accidentally committed to code. Tools like git-secrets and pre-commit hooks catch these before they ship.
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

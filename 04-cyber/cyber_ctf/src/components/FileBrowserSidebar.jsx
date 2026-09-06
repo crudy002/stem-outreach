@@ -12,7 +12,9 @@ export function FileBrowserSidebar({ tree, onSelectFile }) {
 }
 
 function TreeNode({ node, depth, onSelectFile }) {
-  const [open, setOpen] = useState(depth === 0);
+  // Folders start collapsed — opening them is the puzzle, so don't hand
+  // kids the answer by pre-expanding the tree.
+  const [open, setOpen] = useState(false);
   const indent = 10 + depth * 14;
 
   if (node.type === 'file') {
