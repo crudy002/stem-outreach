@@ -36,10 +36,8 @@ export function HackedScreen({ elapsedSeconds, submitStatus, assisted, rank, onV
 
         <div style={{ fontSize: '11px', color: '#5a7090', letterSpacing: '0.2em', marginBottom: '8px' }}>WHAT YOU LEARNED</div>
         <div style={{ fontSize: '12px', color: '#8da3c0', lineHeight: '1.7' }}>
-          • Default passwords are catastrophic<br/>
-          • Secrets in config files leak constantly<br/>
-          • Privilege escalation turns small wins into full compromise<br/>
-          • Defense in depth blocks each stage independently
+          Default creds → leaked secrets → unchecked privileges = full compromise.<br/>
+          Defense in depth would've stopped you at any one of those steps.
         </div>
 
         <div style={{ borderTop: '1px solid #1f3354', marginTop: '16px', paddingTop: '16px' }}>

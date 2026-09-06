@@ -84,7 +84,7 @@ export function LogsOverlay({ onClose }) {
         </div>
 
         <div style={{ marginTop: '14px', fontSize: '11px', color: '#5a7090', lineHeight: '1.6' }}>
-          Yellow lines are what a SOC analyst's alerting rules would catch — including your own login and <code>sudo su</code> a minute ago. Nothing you do here is invisible.
+          Yellow = what a SOC analyst's alerts would catch. Nothing here is invisible.
         </div>
       </div>
     </div>

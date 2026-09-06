@@ -76,7 +76,7 @@ export function ExfilOverlay({ onClose }) {
               ⚠ DLP ALERT — SOC NOTIFIED
             </div>
             <div style={{ fontSize: '11.5px', color: '#8da3c0', lineHeight: '1.6' }}>
-              {TOTAL}MB transferred to an external host before anyone reviewed it manually. In a real attack, this is the moment data becomes unrecoverable — the exfil already happened by the time anyone reads the alert.
+              {TOTAL}MB gone before anyone read the alert. Exfil beats detection every time.
             </div>
           </div>
         )}
