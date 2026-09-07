@@ -46,6 +46,11 @@ npm install          # one-time, needs internet — see "Offline operation" belo
 npm run build        # outputs to dist/ (~830KB, ~59KB gzipped JS)
 
 # copy dist/ and leaderboard-api/ to the Pi, e.g.:
+# (rsync only creates the last path component, not the whole parent chain,
+# so mkdir -p the target dirs first — otherwise it fails with "No such
+# file or directory" on a Pi that's never been deployed to before)
+ssh dietpi@<pi-ip> mkdir -p /home/dietpi/cyber-ctf/cyber_ctf/dist \
+  /home/dietpi/cyber-ctf/leaderboard-api
 rsync -avz dist/ dietpi@<pi-ip>:/home/dietpi/cyber-ctf/cyber_ctf/dist/
 rsync -avz --exclude venv --exclude __pycache__ --exclude leaderboard.db \
   ../leaderboard-api/ dietpi@<pi-ip>:/home/dietpi/cyber-ctf/leaderboard-api/

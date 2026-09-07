@@ -19,6 +19,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "==> Building cyber_ctf/dist"
 (cd "$SCRIPT_DIR/cyber_ctf" && npm install && npm run build)
 
+echo "==> Ensuring remote directories exist"
+ssh "$PI_HOST" "mkdir -p $REMOTE_DIR/cyber_ctf/dist $REMOTE_DIR/leaderboard-api"
+
 echo "==> Syncing cyber_ctf/dist to $PI_HOST:$REMOTE_DIR/cyber_ctf/dist"
 rsync -avz --delete \
   "$SCRIPT_DIR/cyber_ctf/dist/" \
