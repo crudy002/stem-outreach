@@ -5,7 +5,9 @@ import { LoginScreen } from './components/LoginScreen';
 import { FilesystemScreen } from './components/FilesystemScreen';
 import { EscalateScreen } from './components/EscalateScreen';
 import { HackedScreen } from './components/HackedScreen';
+import { IntroOverlay } from './components/IntroOverlay';
 import { LeaderboardModal } from './components/LeaderboardModal';
+import { ElapsedTimer } from './components/ElapsedTimer';
 
 // The leaderboard API runs standalone (see ../leaderboard-api) and defaults
 // to localhost:8000. Override with VITE_LEADERBOARD_API_URL when the API is
@@ -15,6 +17,7 @@ const STATION_ID = import.meta.env.VITE_STATION_ID || null;
 
 export default function App() {
   const [stage, setStage] = useState('start'); // start, login, filesystem, escalate, hacked, victory
+  const [mode, setMode] = useState('easy'); // easy: click-to-explore + one-click root. hard: type every command.
   const [playerName, setPlayerName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -24,6 +27,7 @@ export default function App() {
   const [escalated, setEscalated] = useState(false);
   const [progress, setProgress] = useState(0);
   const [startTime, setStartTime] = useState(null);
+  const [rootReachedAt, setRootReachedAt] = useState(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(null);
   const [submitStatus, setSubmitStatus] = useState('idle'); // idle, submitting, done, error
   const [rank, setRank] = useState(null);
@@ -37,9 +41,9 @@ export default function App() {
   const terminal = useTerminal({
     playerName,
     onCredentialsFound: () => setProgress(60),
-    onRootAccess: () => { setStage('escalate'); setProgress(80); },
+    onRootAccess: () => { setStage('escalate'); setProgress(80); setRootReachedAt(Date.now()); },
   });
-  const { foundCreds, commandInputRef } = terminal;
+  const { foundCreds, assisted, commandInputRef } = terminal;
 
   useEffect(() => {
     if (stage === 'filesystem' && commandInputRef.current) commandInputRef.current.focus();
@@ -88,6 +92,10 @@ export default function App() {
 
   const beginMission = () => {
     if (!playerName.trim()) return;
+    setStage('intro');
+  };
+
+  const launchMission = () => {
     setStartTime(Date.now());
     setStage('login');
     setProgress(20);
@@ -106,12 +114,15 @@ export default function App() {
 
   const runEscalation = (action) => {
     if (action === 'inject') {
-      const elapsed = startTime ? (Date.now() - startTime) / 1000 : null;
+      // Locked at root access, not at this click — the timed skill is
+      // breach → creds → escalate; exploring the escalate-screen flavor
+      // actions afterward shouldn't cost leaderboard time.
+      const elapsed = startTime && rootReachedAt ? (rootReachedAt - startTime) / 1000 : null;
       setEscalated(true);
       setStage('hacked');
       setProgress(100);
       setElapsedSeconds(elapsed);
-      if (elapsed !== null) submitScore(elapsed);
+      if (elapsed !== null && !assisted) submitScore(elapsed);
     }
   };
 
@@ -126,6 +137,7 @@ export default function App() {
     setEscalated(false);
     setProgress(0);
     setStartTime(null);
+    setRootReachedAt(null);
     setElapsedSeconds(null);
     setSubmitStatus('idle');
     setRank(null);
@@ -195,6 +207,12 @@ export default function App() {
         />
       )}
 
+      <ElapsedTimer
+        startTime={startTime}
+        running={['login', 'filesystem'].includes(stage)}
+        lockedMs={stage === 'escalate' && rootReachedAt ? rootReachedAt - startTime : null}
+      />
+
       {/* Mission progress */}
       <div style={{ background: '#0f1f33', border: '1px solid #1f3354', borderRadius: '4px', padding: '14px 18px', marginBottom: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
@@ -205,7 +223,7 @@ export default function App() {
           <div style={{ height: '100%', width: `${progress}%`, background: 'linear-gradient(90deg, #5b9bd5, #4ade80)', transition: progress === 0 ? 'none' : 'width 0.6s ease' }}></div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', fontSize: '10px' }}>
-          <span style={{ color: !['start', 'login'].includes(stage) ? '#4ade80' : stage === 'login' ? '#fbbf24' : '#3a4a66' }}>● BREACH ACCESS</span>
+          <span style={{ color: !['start', 'intro', 'login'].includes(stage) ? '#4ade80' : stage === 'login' ? '#fbbf24' : '#3a4a66' }}>● BREACH ACCESS</span>
           <span style={{ color: foundCreds ? '#4ade80' : stage === 'filesystem' ? '#fbbf24' : '#3a4a66' }}>● FIND CREDENTIALS</span>
           <span style={{ color: stage === 'escalate' || stage === 'hacked' ? '#4ade80' : '#3a4a66' }}>● ESCALATE PRIVILEGES</span>
           <span style={{ color: stage === 'hacked' ? '#4ade80' : '#3a4a66' }}>● DEPLOY PAYLOAD</span>
@@ -213,8 +231,10 @@ export default function App() {
       </div>
 
       {stage === 'start' && (
-        <StartScreen playerName={playerName} setPlayerName={setPlayerName} onBegin={beginMission} startButtonRef={startButtonRef} />
+        <StartScreen playerName={playerName} setPlayerName={setPlayerName} mode={mode} setMode={setMode} onBegin={beginMission} startButtonRef={startButtonRef} />
       )}
+
+      {stage === 'intro' && <IntroOverlay playerName={playerName} onComplete={launchMission} />}
 
       {stage === 'login' && (
         <LoginScreen
@@ -230,7 +250,7 @@ export default function App() {
         />
       )}
 
-      {stage === 'filesystem' && <FilesystemScreen terminal={terminal} />}
+      {stage === 'filesystem' && <FilesystemScreen terminal={terminal} mode={mode} />}
 
       {stage === 'escalate' && <EscalateScreen onInject={() => runEscalation('inject')} />}
 
@@ -238,6 +258,7 @@ export default function App() {
         <HackedScreen
           elapsedSeconds={elapsedSeconds}
           submitStatus={submitStatus}
+          assisted={assisted}
           rank={rank}
           onViewLeaderboard={openLeaderboard}
           onReset={reset}

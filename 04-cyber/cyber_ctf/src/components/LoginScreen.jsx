@@ -106,20 +106,33 @@ export function LoginScreen({
       </div>
 
       {/* Hint panel */}
-      <div style={{ background: '#0f1f33', border: '1px solid #1f3354', borderRadius: '4px', padding: '24px' }}>
-        <div style={{ fontSize: '11px', color: '#5a7090', letterSpacing: '0.2em', marginBottom: '14px' }}>OPERATION BRIEFING</div>
-        <div style={{ fontSize: '13px', lineHeight: '1.7', color: '#c8d4e3', marginBottom: '16px' }}>
-          You're a security researcher testing a system that's been flagged as vulnerable. Your mission: gain access, locate sensitive data, and demonstrate full system compromise.
+      <div style={{ background: '#0f1f33', border: '1px solid #1f3354', borderRadius: '4px', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <div style={{ fontSize: '11px', color: '#5a7090', letterSpacing: '0.2em', marginBottom: '14px', alignSelf: 'flex-start' }}>OPERATION BRIEFING</div>
+        <div style={{ fontSize: '13px', lineHeight: '1.7', color: '#c8d4e3', marginBottom: '8px', alignSelf: 'flex-start' }}>
+          This system's been flagged as vulnerable. Get in, find the data, prove it.
         </div>
-        <div style={{ background: '#081320', border: '1px solid #1f3354', padding: '14px', borderRadius: '2px', marginTop: '20px' }}>
-          <div style={{ fontSize: '10px', color: '#fbbf24', letterSpacing: '0.2em', marginBottom: '8px' }}>⚠ INTEL DROP</div>
-          <div style={{ fontSize: '12px', color: '#8da3c0', lineHeight: '1.6' }}>
-            The system administrator was reported to use default credentials. Common defaults include "admin" with the password being a single common word that means... "password".
-          </div>
+
+        <div style={{ fontSize: '10px', color: '#5a7090', letterSpacing: '0.1em', marginTop: '18px', marginBottom: '10px' }}>
+          someone left this on the desk...
         </div>
-        <div style={{ marginTop: '20px', fontSize: '10px', color: '#3a4a66', lineHeight: '1.6' }}>
-          <div style={{ color: '#5a7090', letterSpacing: '0.15em', marginBottom: '6px' }}>LESSON</div>
-          Default credentials are the #1 cause of breaches in real systems. Always change them.
+        <div style={{
+          background: '#fef3a3',
+          color: '#3a3320',
+          padding: '16px 20px',
+          width: '190px',
+          fontFamily: '"Comic Sans MS", "Marker Felt", cursive',
+          fontSize: '16px',
+          lineHeight: '1.5',
+          textAlign: 'center',
+          transform: 'rotate(-3deg)',
+          boxShadow: '3px 4px 10px rgba(0,0,0,0.4)',
+        }}>
+          admin<br/>password
+          <div style={{ fontSize: '10px', marginTop: '10px', opacity: 0.75 }}>— shh, don't tell IT 🤫</div>
+        </div>
+
+        <div style={{ marginTop: '18px', fontSize: '10px', color: '#3a4a66', textAlign: 'center' }}>
+          Sticky notes are how real breaches start.
         </div>
       </div>
     </div>

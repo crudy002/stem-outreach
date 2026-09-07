@@ -1,4 +1,7 @@
-export function FilesystemScreen({ terminal }) {
+import { FILE_TREE } from '../hooks/useTerminal';
+import { FileBrowserSidebar } from './FileBrowserSidebar';
+
+export function FilesystemScreen({ terminal, mode }) {
   const {
     FLAG,
     terminalOutput,
@@ -7,15 +10,29 @@ export function FilesystemScreen({ terminal }) {
     foundCreds,
     sudoPrompt,
     copiedFlag,
+    hasCopiedFlag,
     terminalRef,
     commandInputRef,
     promptPath,
     handleTerminalKeyDown,
     copyToClipboard,
+    viewFile,
+    unlockRoot,
+    assisted,
+    strugglingBadly,
+    callForBackup,
   } = terminal;
+  const easy = mode === 'easy';
+
+  const fillInSudo = () => {
+    setCommand('sudo su');
+    commandInputRef.current?.focus();
+  };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '20px' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: easy ? '200px 1fr 320px' : '1fr 320px', gap: '20px' }}>
+      {easy && <FileBrowserSidebar tree={FILE_TREE} onSelectFile={viewFile} />}
+
       <div
         onClick={() => commandInputRef.current && commandInputRef.current.focus()}
         style={{ background: '#081320', border: '1px solid #1f3354', borderRadius: '4px', padding: '20px', height: '480px', display: 'flex', flexDirection: 'column' }}
@@ -37,7 +54,11 @@ export function FilesystemScreen({ terminal }) {
                 <div style={{ marginTop: '6px' }}>
                   <button
                     onClick={() => copyToClipboard(FLAG)}
-                    style={{ background: 'transparent', border: '1px solid #2a4870', color: copiedFlag ? '#4ade80' : '#5b9bd5', padding: '4px 10px', fontFamily: 'inherit', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', borderRadius: '2px' }}
+                    style={{
+                      background: 'transparent', border: '1px solid #2a4870', color: copiedFlag ? '#4ade80' : '#5b9bd5',
+                      padding: '4px 10px', fontFamily: 'inherit', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', borderRadius: '2px',
+                      animation: (easy && !hasCopiedFlag) ? 'pulse-warn 1.3s infinite' : 'none',
+                    }}
                   >
                     {copiedFlag ? '✓ Copied!' : '📋 Copy Flag'}
                   </button>
@@ -72,33 +93,58 @@ export function FilesystemScreen({ terminal }) {
           </div>
         </div>
 
+        {strugglingBadly && !assisted && (
+          <div style={{ background: '#1a1408', border: '1px solid #7a5a10', borderRadius: '4px', padding: '16px' }}>
+            <div style={{ fontSize: '11px', color: '#fbbf24', letterSpacing: '0.2em', marginBottom: '8px' }}>📡 STUCK?</div>
+            <div style={{ fontSize: '12px', color: '#c8b088', lineHeight: '1.6', marginBottom: '10px' }}>
+              HQ can take over and finish the mission for you. You'll still see it through — this run just won't count for the leaderboard.
+            </div>
+            <button
+              onClick={callForBackup}
+              style={{ width: '100%', background: 'transparent', border: '1px solid #fbbf24', color: '#fbbf24', padding: '8px 12px', fontFamily: 'inherit', fontSize: '10px', letterSpacing: '0.15em', cursor: 'pointer', borderRadius: '2px' }}
+            >
+              CALL FOR BACKUP
+            </button>
+          </div>
+        )}
+
         <div style={{ background: '#0f1f33', border: '1px solid #1f3354', borderRadius: '4px', padding: '16px' }}>
           <div style={{ fontSize: '11px', color: '#fbbf24', letterSpacing: '0.2em', marginBottom: '10px' }}>⚠ INTEL DROP</div>
           {!foundCreds ? (
             <div style={{ fontSize: '12px', color: '#8da3c0', lineHeight: '1.6' }}>
-              Try <span style={{ color: '#5b9bd5' }}>ls config/</span>. Devs sometimes leave secrets in plain text. Tab-complete file names, and use ↑/↓ to reuse past commands.
+              {easy ? (
+                <>Open the folders. One file's hiding something it shouldn't.</>
+              ) : (
+                <>Try <span style={{ color: '#5b9bd5' }}>ls config/</span>. Devs sometimes leave secrets in plain text. Tab-complete file names, and use ↑/↓ to reuse past commands.</>
+              )}
             </div>
           ) : (
             <div style={{ fontSize: '12px', color: '#8da3c0', lineHeight: '1.6' }}>
-              Got the password? Use the <span style={{ color: '#5b9bd5' }}>📋 Copy Flag</span> button on that output, then run <span style={{ color: '#5b9bd5' }}>sudo su</span> and paste it (Ctrl/Cmd+V) when prompted.
-              {sudoPrompt === null && (
+              {easy ? (
+                hasCopiedFlag ? <>Password copied. Escalate?</> : <>Copy the password above first.</>
+              ) : (
+                <>Got the password? Use the <span style={{ color: '#5b9bd5' }}>📋 Copy Flag</span> button on that output, then run <span style={{ color: '#5b9bd5' }}>sudo su</span> and paste it (Ctrl/Cmd+V) when prompted.</>
+              )}
+              {sudoPrompt === null && (!easy || hasCopiedFlag) && (
                 <button
-                  onClick={(e) => { e.stopPropagation(); setCommand('sudo su'); commandInputRef.current?.focus(); }}
+                  onClick={(e) => { e.stopPropagation(); easy ? unlockRoot() : fillInSudo(); }}
                   style={{ display: 'block', marginTop: '10px', background: 'transparent', border: '1px solid #2a4870', color: '#5b9bd5', padding: '6px 12px', fontFamily: 'inherit', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', borderRadius: '2px' }}
                 >
-                  ⌨ Fill in 'sudo su'
+                  {easy ? "🔓 Unlock Root Access" : "⌨ Fill in 'sudo su'"}
                 </button>
               )}
             </div>
           )}
         </div>
 
-        <div style={{ background: '#0f1f33', border: '1px solid #1f3354', borderRadius: '4px', padding: '16px' }}>
-          <div style={{ fontSize: '11px', color: '#5a7090', letterSpacing: '0.2em', marginBottom: '10px' }}>LESSON</div>
-          <div style={{ fontSize: '11px', color: '#8da3c0', lineHeight: '1.6' }}>
-            Real breaches often start with secrets accidentally committed to code. Tools like git-secrets and pre-commit hooks catch these before they ship.
+        {!easy && (
+          <div style={{ background: '#0f1f33', border: '1px solid #1f3354', borderRadius: '4px', padding: '16px' }}>
+            <div style={{ fontSize: '11px', color: '#5a7090', letterSpacing: '0.2em', marginBottom: '10px' }}>LESSON</div>
+            <div style={{ fontSize: '11px', color: '#8da3c0', lineHeight: '1.6' }}>
+              Real breaches often start with secrets accidentally committed to code. Tools like git-secrets and pre-commit hooks catch these before they ship.
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
