@@ -1,42 +1,44 @@
 #!/usr/bin/env python3
 """
-sender.py - Creates a "packet", sends it over UDP, and reports to the coordinator.
+sender.py — Creates packets, resolves the target via the coordinator, and
+sends them over UDP.
 
-This is the visualization-aware version of the sender. It does everything the
-original did (build a packet, pause, fire it over UDP), and ALSO reports to
-the coordinator server so the React dashboard can show this node sending.
+ARCHITECTURE
+Previously the sender needed two separate arguments: --target (raw IP for
+the socket) and --target-id (cosmetic node ID for the dashboard). That
+split was fragile — you had to keep them in sync manually.
 
-The coordinator reporting is best-effort: if the coordinator isn't running,
-the report quietly fails and the core UDP demo still works as before.
+Now the coordinator is the single source of truth for addresses:
+  1. The receiver registers its node ID + UDP port with the coordinator.
+     The coordinator records its IP automatically from the HTTP connection.
+  2. The sender registers itself, then asks the coordinator for the target
+     node's IP and port by node ID.
+  3. The UDP packet goes directly Pi-to-Pi as before; only the address
+     lookup goes through the coordinator.
 
-TWO DIFFERENT "TARGETS"
-There are two distinct ideas here, and they are NOT the same thing:
-  --target     WHERE the packet physically goes. Must be routable by the
-               network: an IP address (127.0.0.1, 192.168.1.50) or a real
-               hostname. This is what socket.sendto() actually uses.
-  --target-id  WHAT to call that destination on the dashboard. A friendly
-               node ID like "PI-RECV". Purely cosmetic - it only exists so
-               the visualization can draw the packet going to the right box.
-               The network never sees this.
+Everything at the application layer uses node IDs. Raw IPs are an
+implementation detail that never surfaces in commands or the dashboard.
 
 Run it:
-    python sender.py --target 127.0.0.1 --target-id PI-RECV
-    python sender.py --target 192.168.1.50 --target-id PI-02 --id PI-01
-    python sender.py --target 127.0.0.1 --count 5
+    python sender.py --target PI-RECV
+    python sender.py --target PI-02 --id PI-01 --coordinator 192.168.1.10:8080
+    python sender.py --target PI-RECV --interactive
+    python sender.py --target PI-RECV --count 5
 """
 
 import socket
-import sys
 import json
 import time
 import argparse
 import urllib.request
+import urllib.error
 from datetime import datetime
 
-DEFAULT_PORT = 5005
-DEFAULT_TARGET = "127.0.0.1"
 DEFAULT_COORDINATOR = "127.0.0.1:8080"
+DEFAULT_TARGET_ID = "PI-RECV"
 TRAVEL_DELAY_SECONDS = 1.0
+RESOLVE_RETRIES = 10
+RESOLVE_DELAY = 2.0
 
 
 def timestamp():
@@ -61,11 +63,46 @@ def report(coordinator, node_id, action, detail=""):
         )
         urllib.request.urlopen(req, timeout=1.0).read()
     except Exception:
-        pass  # coordinator offline - fine, keep going
+        pass  # coordinator offline - fine, UDP demo still works
+
+
+def resolve_target(coordinator, target_id):
+    """
+    Ask the coordinator for target_id's current IP and UDP port.
+    Retries up to RESOLVE_RETRIES times with RESOLVE_DELAY seconds between
+    attempts so the sender can start before the receiver if needed.
+    Returns (ip, port) or raises SystemExit if the target never appears.
+    """
+    url = f"http://{coordinator}/nodes/{target_id}"
+    for attempt in range(RESOLVE_RETRIES):
+        try:
+            with urllib.request.urlopen(url, timeout=2.0) as r:
+                data = json.loads(r.read().decode("utf-8"))
+            ip = data.get("ip")
+            port = data.get("port")
+            if ip and port:
+                return ip, int(port)
+            print(f"  [{timestamp()}] {target_id} registered but missing ip/port, retrying...")
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                print(f"  [{timestamp()}] waiting for {target_id} to register "
+                      f"({attempt + 1}/{RESOLVE_RETRIES})...")
+            else:
+                print(f"  [{timestamp()}] coordinator error {e.code}, retrying...")
+        except Exception:
+            print(f"  [{timestamp()}] coordinator unreachable, retrying "
+                  f"({attempt + 1}/{RESOLVE_RETRIES})...")
+        if attempt < RESOLVE_RETRIES - 1:
+            time.sleep(RESOLVE_DELAY)
+
+    raise SystemExit(
+        f"\nERROR: {target_id} never appeared in the coordinator after "
+        f"{RESOLVE_RETRIES} attempts. Is the receiver running and pointing "
+        f"at the same coordinator?"
+    )
 
 
 def build_packet(sequence_number):
-    """Assemble the packet contents as a simple dictionary."""
     return {
         "seq": sequence_number,
         "sent_at": timestamp(),
@@ -76,66 +113,80 @@ def build_packet(sequence_number):
 
 def main():
     parser = argparse.ArgumentParser(description="UDP packet sender")
-    parser.add_argument("--target", default=DEFAULT_TARGET,
-                        help="receiver IP address or hostname (routable)")
-    parser.add_argument("--target-id", dest="target_id", default=None,
-                        help="receiver's node id for the dashboard "
-                             "(e.g. PI-RECV); cosmetic only")
-    parser.add_argument("--port", type=int, default=DEFAULT_PORT,
-                        help="receiver UDP port")
+    parser.add_argument("--target", default=DEFAULT_TARGET_ID,
+                        help="target receiver's node ID (coordinator resolves "
+                             "the actual IP:port)")
     parser.add_argument("--id", default="PI-SEND",
-                        help="this node's id shown on the dashboard")
+                        help="this node's ID on the coordinator/dashboard")
     parser.add_argument("--coordinator", default=DEFAULT_COORDINATOR,
                         help="coordinator address as host:port")
     parser.add_argument("--count", type=int, default=1,
-                        help="how many packets to send")
+                        help="packets to send per trigger (default 1)")
+    parser.add_argument("--interactive", action="store_true",
+                        help="keep running; press ENTER (optionally type a "
+                             "number first) to send packets on demand")
     args = parser.parse_args()
-
-    # For the dashboard label, prefer the explicit --target-id. If it wasn't
-    # given, fall back to the raw --target (an IP) so the report still has
-    # *something* - the dashboard's own fallback will handle the rest.
-    target_label = args.target_id if args.target_id else args.target
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-    print("=" * 52)
+    print("=" * 56)
     print("  PACKET SENDER")
     print(f"  Node id    : {args.id}")
-    print(f"  Target     : {args.target}:{args.port}")
-    print(f"  Target id  : {target_label}  (dashboard label)")
+    print(f"  Target     : {args.target}  (resolved via coordinator)")
     print(f"  Coordinator: {args.coordinator}")
-    print("=" * 52)
+    print("=" * 56)
 
-    # Announce ourselves so the dashboard shows this node right away.
+    # Register so the dashboard shows this node immediately.
     report(args.coordinator, args.id, "register")
 
-    for seq in range(1, args.count + 1):
-        packet = build_packet(seq)
-        print(f"\n[{timestamp()}] Packet #{seq} created:")
-        print(f"  {packet}")
+    seq = 0
 
-        # The deliberate pause - a packet takes TIME to travel.
-        print(f"[{timestamp()}] Sending... watch it travel ({TRAVEL_DELAY_SECONDS}s)")
-        time.sleep(TRAVEL_DELAY_SECONDS)
+    def send_batch(count):
+        nonlocal seq
+        # Re-resolve the target's address on every batch so the sender
+        # automatically picks up a new IP if the receiver restarts.
+        target_ip, target_port = resolve_target(args.coordinator, args.target)
+        print(f"  → {args.target} resolved to {target_ip}:{target_port}")
 
-        message_bytes = json.dumps(packet).encode("utf-8")
-        # Note: socket.sendto uses args.target (the routable address),
-        # NEVER target_label. A node id is not something the network
-        # can resolve.
-        sock.sendto(message_bytes, (args.target, args.port))
+        for _ in range(count):
+            seq += 1
+            packet = build_packet(seq)
+            print(f"\n[{timestamp()}] Packet #{seq} created:")
+            print(f"  {packet}")
+            print(f"[{timestamp()}] Sending... watch it travel ({TRAVEL_DELAY_SECONDS}s)")
+            time.sleep(TRAVEL_DELAY_SECONDS)
 
-        # Report the send. The detail string includes target_label so the
-        # dashboard's guessTarget() can find the destination node id.
-        report(args.coordinator, args.id, "send",
-               detail=f"sent packet #{seq} to {target_label}")
+            sock.sendto(json.dumps(packet).encode("utf-8"), (target_ip, target_port))
+            report(args.coordinator, args.id, "send",
+                   detail=f"sent packet #{seq} to {args.target}")
+            print(f"[{timestamp()}] Packet #{seq} sent!")
 
-        print(f"[{timestamp()}] Packet #{seq} sent!")
+            if _ < count - 1:
+                time.sleep(0.5)
 
-        # Small gap between packets when sending several.
-        if seq < args.count:
-            time.sleep(0.5)
+    if args.interactive:
+        print("\nINTERACTIVE MODE — press ENTER to send packet(s).")
+        print("  Type a number before ENTER to send that many (e.g. '3 ENTER').")
+        print("  Type 'q' and ENTER to quit.\n")
+        try:
+            while True:
+                raw = input("» ").strip()
+                if raw.lower() == "q":
+                    break
+                try:
+                    count = int(raw) if raw else args.count
+                    count = max(1, count)
+                except ValueError:
+                    print("  (enter a number or just press ENTER)")
+                    continue
+                send_batch(count)
+        except (KeyboardInterrupt, EOFError):
+            pass
+        print("\nDone.")
+    else:
+        send_batch(args.count)
+        print("\nDone.")
 
-    print("\nDone.")
     sock.close()
 
 
