@@ -16,8 +16,15 @@ Run it:
 Then:
     http://localhost:8000/docs   — interactive API docs
     http://localhost:8000/scores — top times (JSON)
+
+If ../cyber_ctf/dist exists (built with `npm run build`), this also serves
+the built React app at http://localhost:8000/ — one process, one port, no
+nginx/serve needed. See the top-level README for the booth deployment this
+is meant for. Set STATIC_DIR to point elsewhere; unset/missing just skips
+the mount and the API still works on its own.
 """
 
+import os
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -25,11 +32,13 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse
 
 DB_PATH = Path(__file__).parent / "leaderboard.db"
+STATIC_DIR = Path(os.environ.get("STATIC_DIR", Path(__file__).parent.parent / "cyber_ctf" / "dist"))
 
 app = FastAPI(title="Cyber CTF Leaderboard", docs_url=None)
 
@@ -120,10 +129,6 @@ async def custom_swagger_ui_html() -> HTMLResponse:
     return HTMLResponse(content=modified_html)
 
 
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
-
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -183,3 +188,11 @@ def reset_scores():
     """Wipe the board — for clearing test runs between booth sessions."""
     with get_db() as conn:
         conn.execute("DELETE FROM scores")
+
+
+# Mounted last so it never shadows the API routes above — Starlette matches
+# routes in registration order, and a mount only catches what nothing earlier
+# claimed. html=True serves dist/index.html for "/"; unbuilt/missing dist
+# just means no frontend is served, the API still works standalone.
+if STATIC_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

@@ -22,6 +22,15 @@ Interactive docs: http://localhost:8000/docs
 A `leaderboard.db` SQLite file is created next to `main.py` on first run
 (gitignored).
 
+## Also serves the built frontend
+
+If `../cyber_ctf/dist/` exists (run `npm run build` in `cyber_ctf/` first),
+this app mounts it as static files at `/` — so the same `uvicorn` process
+serves the React app *and* the API on one port, no separate static server
+needed. Set `STATIC_DIR` to point somewhere else, or just don't build
+`dist/` if you want this to run as an API-only service. See the top-level
+[README](../README.md) for the booth deployment this is meant for.
+
 ## API
 
 - `GET /health` — `{"status": "ok"}`
