@@ -181,99 +181,69 @@ straight to Chromium" without hand-rolling X11/openbox/autostart yourself.
   `dietpi-update` / `dietpi-config` prompts finish — set a hostname and,
   if you're on WiFi, the network there.
 
-### 2. Install what the booth needs
+### 2. Provision the Pi
 
-Run `dietpi-software` and, from its menu, install:
-
-- **Chromium** (DietPi lists it under browsers) — this is the kiosk browser.
-- **Python 3 + pip**, if not already present (`python3 -m venv` needs
-  `python3-venv`; DietPi's Python software entry usually includes it, but
-  `apt install python3-venv` covers you if `python3 -m venv` complains).
-
-Menu item numbers shift between DietPi releases, so search the list rather
-than trusting a specific number here — `dietpi-software` has an in-menu
-search. `git` is handy too if you're pulling the repo directly onto the Pi
-rather than copying files over.
-
-### 3. Get the app onto the Pi
-
-Build `dist/` on your laptop (Node isn't needed on the Pi — see "Running it
-at the booth" above) and copy the whole `04-cyber` folder over, or just the
-two pieces you need:
+[`setup-pi.sh`](setup-pi.sh) does everything below in one idempotent run —
+safe to re-run any time, including on a Pi you've already set up by hand:
 
 ```bash
-scp -r cyber_ctf/dist leaderboard-api dietpi@<pi-ip>:/home/dietpi/cyber-ctf/
+./setup-pi.sh dietpi@<pi-ip>              # auto-detects the screen resolution via xrandr
+./setup-pi.sh dietpi@<pi-ip> 1920x1080    # or set it explicitly
 ```
 
-Then on the Pi, set up the API's venv (this step does need internet, once):
+It installs Chromium/X11/Python packages via `apt` (skips anything already
+present, so it's cheap to re-run), writes the `cyber-ctf.service` systemd
+unit with **`User=dietpi` baked in from the start**, adds a sudoers rule
+scoped to just `systemctl restart/status cyber-ctf.service` (so
+`deploy-to-pi.sh` can restart it without a password prompt), and sets
+`SOFTWARE_CHROMIUM_AUTOSTART_URL`/`_RES_X`/`_RES_Y` in `/boot/dietpi.txt`
+to `http://127.0.0.1:8000` and the detected resolution.
+
+The `User=dietpi` part matters more than it looks: if the service is ever
+started once *without* it (defaulting to root), the files it creates —
+`leaderboard.db`, `__pycache__` — end up root-owned, and once you add
+`User=dietpi` afterwards, that already-root-owned `leaderboard.db` becomes
+unwritable to the dietpi-owned process, so every score submission fails
+with `sqlite3.OperationalError: attempt to write a readonly database`
+while everything else looks fine (the API still starts, `GET /scores`
+still works — only writes fail). This exact bug happened once already
+setting this up by hand, which is why `setup-pi.sh` exists.
+
+One thing it doesn't set: which DietPi autostart target actually boots
+into Chromium. That's a one-time interactive pick (DietPi doesn't expose
+it as a scriptable `dietpi.txt` value that reliably takes effect after
+first boot):
 
 ```bash
-cd /home/dietpi/cyber-ctf/leaderboard-api
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+ssh dietpi@<pi-ip>
+sudo dietpi-autostart
+# pick "Chromium kiosk" (menu number varies by DietPi version — search if needed)
 ```
 
-Sanity-check it serves both the app and the API before wiring up autostart:
+### 3. Deploy the app
 
 ```bash
-uvicorn main:app --host 0.0.0.0 --port 8000
-# from another machine on the LAN: curl http://<pi-ip>:8000/health
+./deploy-to-pi.sh dietpi@<pi-ip>
 ```
 
-### 4. Run it as a service
+Builds `cyber_ctf/dist`, rsyncs it plus `leaderboard-api`'s source to the
+Pi, installs any new Python deps into its venv, and restarts the service
+(see "Getting code onto the Pi" above for what this does and why).
 
-Don't rely on a terminal session staying open. Create
-`/etc/systemd/system/cyber-ctf.service`:
-
-```ini
-[Unit]
-Description=Cyber CTF (FastAPI serving the leaderboard API + built frontend)
-After=network.target
-
-[Service]
-Type=simple
-User=dietpi
-WorkingDirectory=/home/dietpi/cyber-ctf/leaderboard-api
-ExecStart=/home/dietpi/cyber-ctf/leaderboard-api/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
-Restart=on-failure
-RestartSec=2
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Then:
+### 4. Reboot and check
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now cyber-ctf.service
-sudo systemctl status cyber-ctf.service   # confirm it's active
+ssh dietpi@<pi-ip> sudo reboot
 ```
 
-`Restart=on-failure` means the booth recovers from a crash on its own —
-nobody needs to SSH in mid-event to restart a hung process.
+`/boot/dietpi.txt` changes need a reboot to take effect. After it comes
+back, the kiosk should show the game fullscreen at the right resolution.
+If it doesn't, work through it top-down: is `cyber-ctf.service` active
+(`systemctl status`), does `curl http://127.0.0.1:8000/health` succeed on
+the Pi itself, and does `ps aux | grep chromium` show the URL you expect
+(catches a stale `https://` or wrong resolution baked into an old config).
 
-### 5. Point the kiosk at it
-
-In `dietpi-autostart` (run `dietpi-autostart` or find the option inside
-`dietpi-config` → Autostart Options), pick the Chromium-kiosk autostart
-option and set its URL to `http://localhost:8000`. Since the systemd
-service above starts independently of the desktop session, add
-`After=network.target` (already there) and don't make the kiosk autostart
-depend on the API being instantly ready — Chromium retrying/reloading once
-on a blank page at boot is normal and harmless.
-
-If you'd rather not use the built-in autostart picker, launch Chromium
-directly with kiosk flags from whatever autostart hook DietPi gives you:
-
-```bash
-chromium-browser --kiosk --noerrdialogs --disable-infobars \
-  --disable-session-crashed-bubble --overscroll-history-navigation=0 \
-  http://localhost:8000
-```
-
-### 6. A few RAM/reliability notes
+### 5. A few RAM/reliability notes
 
 - **Swap**: DietPi defaults to a small `dphys-swapfile`/zram setup that's
   usually fine, but on a 1GB Pi 3B running Chromium for hours, bump it via
@@ -297,3 +267,63 @@ If you'd rather use Raspberry Pi OS Lite instead of DietPi, the same
 systemd service and Chromium kiosk flags above work unchanged — you'd just
 install Chromium/Python via `apt` and wire up the kiosk autostart yourself
 via `.xinitrc`/openbox rather than `dietpi-autostart`'s menu.
+
+## Cloning the Pi for multiple booth stations
+
+Once one Pi is fully working (steps 1–4 above done, kiosk confirmed
+showing the game), cloning its SD card is faster than re-running setup on
+every additional station — everything above is already baked in.
+
+### Before imaging
+
+- **Reset the leaderboard** so the clone doesn't start with another
+  station's test scores already on the board:
+  ```bash
+  ssh dietpi@<pi-ip> "curl -X DELETE http://127.0.0.1:8000/scores"
+  ```
+- **Decide on hostnames.** Every clone boots with the same hostname
+  unless you change it. `AUTO_SETUP_NET_HOSTNAME` in `/boot/dietpi.txt` is
+  editable straight from a card reader before first boot (`/boot` is a
+  plain FAT32 partition on DietPi's SD card) — worth setting per-station
+  if more than one will be on the same LAN at once, since duplicate
+  hostnames cause mDNS/`.local`-name confusion.
+
+### Creating the image (from a Mac)
+
+```bash
+diskutil list                      # find the card, e.g. /dev/disk4 (NOT /dev/disk4s1)
+diskutil unmountDisk /dev/disk4
+sudo dd if=/dev/rdisk4 of=~/cyber-ctf-golden.img bs=4m status=progress
+gzip ~/cyber-ctf-golden.img         # optional, shrinks a mostly-empty card a lot
+```
+
+`/dev/rdisk4` (the raw device) is much faster than `/dev/disk4` for this.
+[ApplePi-Baker](https://www.tweaking4all.com/hardware/raspberry-pi/macosx-apple-pi-baker/)
+is a GUI alternative built for exactly this workflow if you'd rather not
+run `dd` by hand.
+
+### Flashing a clone
+
+```bash
+sudo dd if=~/cyber-ctf-golden.img of=/dev/rdisk5 bs=4m status=progress
+```
+
+(or Raspberry Pi Imager → "Use custom" → point it at the `.img`/`.img.gz`.)
+
+### After first boot of the clone
+
+- **Regenerate SSH host keys.** A clone boots with identical Dropbear
+  host keys to the source Pi — mostly harmless on an isolated booth LAN,
+  but it'll trip a "REMOTE HOST IDENTIFICATION HAS CHANGED" warning on any
+  laptop that previously SSHed into that same IP address for a different
+  physical Pi:
+  ```bash
+  ssh dietpi@<clone-ip> "sudo rm -f /etc/dropbear/dropbear_*_host_key && sudo systemctl restart dropbear"
+  ```
+- Confirm the leaderboard is actually empty
+  (`curl http://127.0.0.1:8000/scores` → `[]`) and the kiosk is showing
+  the game before calling the station ready.
+
+For a single station, `setup-pi.sh` + `deploy-to-pi.sh` on a fresh DietPi
+flash is simple enough that imaging doesn't save much — this is worth
+doing once you're standing up two or more physical Pis.
