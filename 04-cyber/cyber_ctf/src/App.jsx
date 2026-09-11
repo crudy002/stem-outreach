@@ -69,6 +69,10 @@ export default function App() {
     fetchLeaderboard();
   };
 
+  useEffect(() => {
+    fetchLeaderboard();
+  }, []);
+
   const submitScore = (elapsed) => {
     setSubmitStatus('submitting');
     fetch(`${API_BASE}/scores`, {
@@ -195,16 +199,19 @@ export default function App() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: '10px', fontSize: '11px', alignItems: 'center' }}>
-          <select
-            value={themeId}
-            onChange={(e) => setThemeId(e.target.value)}
-            title="Display theme"
-            style={{ background: 'transparent', border: `1px solid ${theme.borderStrong}`, color: theme.muted, padding: '6px 10px', fontFamily: 'inherit', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', borderRadius: '2px' }}
-          >
-            {Object.entries(THEMES).map(([id, t]) => (
-              <option key={id} value={id}>🎨 {t.label.toUpperCase()}</option>
-            ))}
-          </select>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'transparent', border: `1px solid ${theme.borderStrong}`, color: theme.muted, padding: '6px 12px', fontFamily: 'inherit', fontSize: '10px', letterSpacing: '0.15em', cursor: 'pointer', borderRadius: '2px' }}>
+            <span aria-hidden="true">🎨</span>
+            <select
+              value={themeId}
+              onChange={(e) => setThemeId(e.target.value)}
+              title="Display theme"
+              style={{ appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', background: 'transparent', border: 'none', color: 'inherit', font: 'inherit', letterSpacing: 'inherit', cursor: 'pointer', outline: 'none', padding: 0 }}
+            >
+              {Object.entries(THEMES).map(([id, t]) => (
+                <option key={id} value={id}>{t.label.toUpperCase()}</option>
+              ))}
+            </select>
+          </label>
           <button onClick={openLeaderboard} style={{ background: 'transparent', border: `1px solid ${theme.borderStrong}`, color: theme.muted, padding: '6px 12px', fontFamily: 'inherit', fontSize: '10px', letterSpacing: '0.15em', cursor: 'pointer', borderRadius: '2px' }}>🏆 LEADERBOARD</button>
           <button onClick={reset} style={{ background: 'transparent', border: `1px solid ${theme.borderStrong}`, color: theme.muted, padding: '6px 12px', fontFamily: 'inherit', fontSize: '10px', letterSpacing: '0.15em', cursor: 'pointer', borderRadius: '2px' }}>↻ RESET</button>
         </div>
@@ -243,7 +250,17 @@ export default function App() {
       </div>
 
       {stage === 'start' && (
-        <StartScreen playerName={playerName} setPlayerName={setPlayerName} mode={mode} setMode={setMode} onBegin={beginMission} startButtonRef={startButtonRef} />
+        <StartScreen
+          playerName={playerName}
+          setPlayerName={setPlayerName}
+          mode={mode}
+          setMode={setMode}
+          onBegin={beginMission}
+          startButtonRef={startButtonRef}
+          leaderboard={leaderboard}
+          leaderboardError={leaderboardError}
+          onRefreshLeaderboard={fetchLeaderboard}
+        />
       )}
 
       {stage === 'intro' && <IntroOverlay playerName={playerName} onComplete={launchMission} />}
