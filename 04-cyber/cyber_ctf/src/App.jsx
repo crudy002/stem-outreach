@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTerminal } from './hooks/useTerminal';
+import { useTheme, THEMES } from './theme.jsx';
 import { StartScreen } from './components/StartScreen';
 import { LoginScreen } from './components/LoginScreen';
 import { FilesystemScreen } from './components/FilesystemScreen';
@@ -16,6 +17,7 @@ const API_BASE = import.meta.env.VITE_LEADERBOARD_API_URL || 'http://localhost:8
 const STATION_ID = import.meta.env.VITE_STATION_ID || null;
 
 export default function App() {
+  const { theme, themeId, setThemeId } = useTheme();
   const [stage, setStage] = useState('start'); // start, login, filesystem, escalate, hacked, victory
   const [mode, setMode] = useState('easy'); // easy: click-to-explore + one-click root. hard: type every command.
   const [playerName, setPlayerName] = useState('');
@@ -145,7 +147,7 @@ export default function App() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#0a1628', color: '#c8d4e3', fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace', padding: '24px' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: theme.bg, color: theme.text, fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace', padding: '24px' }}>
       <style>{`
         @keyframes shake {
           0%, 100% { transform: translateX(0); }
@@ -174,12 +176,12 @@ export default function App() {
         .cursor::after {
           content: '_';
           animation: blink 1s infinite;
-          color: #5b9bd5;
+          color: ${theme.accent};
         }
       `}</style>
 
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #1f3354', paddingBottom: '14px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: `1px solid ${theme.border}`, paddingBottom: '14px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <img
             src="/navsea-logo.png"
@@ -187,14 +189,24 @@ export default function App() {
             style={{ height: '52px', width: 'auto', display: 'block' }}
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
-          <div style={{ borderLeft: '1px solid #1f3354', paddingLeft: '16px' }}>
-            <div style={{ fontSize: '11px', letterSpacing: '0.3em', color: '#5a7090', marginBottom: '4px' }}>NSWCDD DNA STEM</div>
-            <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#5b9bd5', letterSpacing: '0.05em' }}>CYBER OPERATIONS RANGE</div>
+          <div style={{ borderLeft: `1px solid ${theme.border}`, paddingLeft: '16px' }}>
+            <div style={{ fontSize: '11px', letterSpacing: '0.3em', color: theme.muted, marginBottom: '4px' }}>NSWCDD DNA STEM</div>
+            <div style={{ fontSize: '22px', fontWeight: 'bold', color: theme.accent, letterSpacing: '0.05em' }}>CYBER OPERATIONS RANGE</div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: '10px', fontSize: '11px', alignItems: 'center' }}>
-          <button onClick={openLeaderboard} style={{ background: 'transparent', border: '1px solid #2a4870', color: '#5a7090', padding: '6px 12px', fontFamily: 'inherit', fontSize: '10px', letterSpacing: '0.15em', cursor: 'pointer', borderRadius: '2px' }}>🏆 LEADERBOARD</button>
-          <button onClick={reset} style={{ background: 'transparent', border: '1px solid #2a4870', color: '#5a7090', padding: '6px 12px', fontFamily: 'inherit', fontSize: '10px', letterSpacing: '0.15em', cursor: 'pointer', borderRadius: '2px' }}>↻ RESET</button>
+          <select
+            value={themeId}
+            onChange={(e) => setThemeId(e.target.value)}
+            title="Display theme"
+            style={{ background: 'transparent', border: `1px solid ${theme.borderStrong}`, color: theme.muted, padding: '6px 10px', fontFamily: 'inherit', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', borderRadius: '2px' }}
+          >
+            {Object.entries(THEMES).map(([id, t]) => (
+              <option key={id} value={id}>🎨 {t.label.toUpperCase()}</option>
+            ))}
+          </select>
+          <button onClick={openLeaderboard} style={{ background: 'transparent', border: `1px solid ${theme.borderStrong}`, color: theme.muted, padding: '6px 12px', fontFamily: 'inherit', fontSize: '10px', letterSpacing: '0.15em', cursor: 'pointer', borderRadius: '2px' }}>🏆 LEADERBOARD</button>
+          <button onClick={reset} style={{ background: 'transparent', border: `1px solid ${theme.borderStrong}`, color: theme.muted, padding: '6px 12px', fontFamily: 'inherit', fontSize: '10px', letterSpacing: '0.15em', cursor: 'pointer', borderRadius: '2px' }}>↻ RESET</button>
         </div>
       </div>
 
@@ -214,19 +226,19 @@ export default function App() {
       />
 
       {/* Mission progress */}
-      <div style={{ background: '#0f1f33', border: '1px solid #1f3354', borderRadius: '4px', padding: '14px 18px', marginBottom: '20px' }}>
+      <div style={{ background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: '4px', padding: '14px 18px', marginBottom: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#5a7090', letterSpacing: '0.2em' }}>MISSION PROGRESS</span>
-          <span style={{ fontSize: '11px', color: '#5b9bd5' }}>{progress}%</span>
+          <span style={{ fontSize: '11px', color: theme.muted, letterSpacing: '0.2em' }}>MISSION PROGRESS</span>
+          <span style={{ fontSize: '11px', color: theme.accent }}>{progress}%</span>
         </div>
-        <div style={{ height: '4px', background: '#152942', borderRadius: '2px', overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${progress}%`, background: 'linear-gradient(90deg, #5b9bd5, #4ade80)', transition: progress === 0 ? 'none' : 'width 0.6s ease' }}></div>
+        <div style={{ height: '4px', background: theme.panel2, borderRadius: '2px', overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${progress}%`, background: `linear-gradient(90deg, ${theme.accent}, ${theme.success})`, transition: progress === 0 ? 'none' : 'width 0.6s ease' }}></div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', fontSize: '10px' }}>
-          <span style={{ color: !['start', 'intro', 'login'].includes(stage) ? '#4ade80' : stage === 'login' ? '#fbbf24' : '#3a4a66' }}>● BREACH ACCESS</span>
-          <span style={{ color: foundCreds ? '#4ade80' : stage === 'filesystem' ? '#fbbf24' : '#3a4a66' }}>● FIND CREDENTIALS</span>
-          <span style={{ color: stage === 'escalate' || stage === 'hacked' ? '#4ade80' : '#3a4a66' }}>● ESCALATE PRIVILEGES</span>
-          <span style={{ color: stage === 'hacked' ? '#4ade80' : '#3a4a66' }}>● DEPLOY PAYLOAD</span>
+          <span style={{ color: !['start', 'intro', 'login'].includes(stage) ? theme.success : stage === 'login' ? theme.warning : theme.dim }}>● BREACH ACCESS</span>
+          <span style={{ color: foundCreds ? theme.success : stage === 'filesystem' ? theme.warning : theme.dim }}>● FIND CREDENTIALS</span>
+          <span style={{ color: stage === 'escalate' || stage === 'hacked' ? theme.success : theme.dim }}>● ESCALATE PRIVILEGES</span>
+          <span style={{ color: stage === 'hacked' ? theme.success : theme.dim }}>● DEPLOY PAYLOAD</span>
         </div>
       </div>
 
@@ -265,7 +277,7 @@ export default function App() {
         />
       )}
 
-      <div style={{ marginTop: 'auto', paddingTop: '20px', display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#3a4a66', letterSpacing: '0.15em' }}>
+      <div style={{ marginTop: 'auto', paddingTop: '20px', display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: theme.dim, letterSpacing: '0.15em' }}>
         <span>STEM_OUTREACH_v0.1 // PROTOTYPE</span>
         <span>CYBER_RANGE // DEFENSE TECH OUTREACH</span>
       </div>

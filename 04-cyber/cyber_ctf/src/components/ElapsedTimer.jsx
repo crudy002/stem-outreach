@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTheme } from '../theme.jsx';
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -19,6 +20,7 @@ const formatElapsed = (ms) => {
 // granted, so the leaderboard clock stops before the escalate-screen flavor
 // actions — reading the logs or watching the exfil bar shouldn't cost time).
 export function ElapsedTimer({ startTime, running, lockedMs = null }) {
+  const { theme } = useTheme();
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -36,24 +38,24 @@ export function ElapsedTimer({ startTime, running, lockedMs = null }) {
       position: 'fixed',
       bottom: '20px',
       right: '20px',
-      background: '#081320',
-      border: `1px solid ${lockedMs != null ? '#4ade80' : '#1f3354'}`,
+      background: theme.bgDeep,
+      border: `1px solid ${lockedMs != null ? theme.success : theme.border}`,
       borderRadius: '4px',
       padding: '10px 18px',
       textAlign: 'center',
       zIndex: 50,
     }}>
-      <div style={{ fontSize: '9px', color: '#5a7090', letterSpacing: '0.25em', marginBottom: '4px' }}>
+      <div style={{ fontSize: '9px', color: theme.muted, letterSpacing: '0.25em', marginBottom: '4px' }}>
         {lockedMs != null ? '🔒 LOCKED' : 'ELAPSED'}
       </div>
       <div style={{
         fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
         fontSize: '34px',
         fontWeight: 'bold',
-        color: '#4ade80',
+        color: theme.success,
         letterSpacing: '0.05em',
         fontVariantNumeric: 'tabular-nums',
-        textShadow: '0 0 10px rgba(74, 222, 128, 0.55)',
+        textShadow: `0 0 10px ${theme.successGlow}`,
       }}>
         {formatElapsed(ms)}
       </div>

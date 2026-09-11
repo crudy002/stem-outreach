@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTheme } from '../theme.jsx';
 
 // Semi-meaningful fake syslog noise. `flag` lines are the ones a real SOC
 // analyst would circle — a few even echo the player's own actions earlier
@@ -26,6 +27,7 @@ const LOG_POOL = [
 function pad(n) { return String(n).padStart(2, '0'); }
 
 export function LogsOverlay({ onClose }) {
+  const { theme } = useTheme();
   const [lines, setLines] = useState([]);
   const scrollRef = useRef(null);
   const clockRef = useRef(new Date());
@@ -49,41 +51,41 @@ export function LogsOverlay({ onClose }) {
     <div
       onClick={onClose}
       style={{
-        position: 'fixed', inset: 0, background: 'rgba(4, 9, 18, 0.75)',
+        position: 'fixed', inset: 0, background: theme.overlay,
         display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
       }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{ background: '#0f1f33', border: '1px solid #2a4870', borderRadius: '4px', padding: '24px', width: '640px', maxWidth: '92vw' }}
+        style={{ background: theme.panel, border: `1px solid ${theme.borderStrong}`, borderRadius: '4px', padding: '24px', width: '640px', maxWidth: '92vw' }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-          <div style={{ fontSize: '13px', color: '#8da3c0', letterSpacing: '0.15em' }}>📜 /var/log/syslog — LIVE TAIL</div>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#5a7090', fontSize: '16px', cursor: 'pointer' }}>✕</button>
+          <div style={{ fontSize: '13px', color: theme.text2, letterSpacing: '0.15em' }}>📜 /var/log/syslog — LIVE TAIL</div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: theme.muted, fontSize: '16px', cursor: 'pointer' }}>✕</button>
         </div>
 
         <div
           ref={scrollRef}
           style={{
-            background: '#081320', border: '1px solid #1f3354', borderRadius: '2px',
+            background: theme.bgDeep, border: `1px solid ${theme.border}`, borderRadius: '2px',
             padding: '14px', height: '320px', overflowY: 'auto',
             fontSize: '11.5px', lineHeight: '1.8',
           }}
         >
           {lines.length === 0 && (
-            <div style={{ color: '#3a4a66' }}>connecting to log stream…</div>
+            <div style={{ color: theme.dim }}>connecting to log stream…</div>
           )}
           {lines.map((l) => (
-            <div key={l.id} style={{ color: l.flag ? '#fbbf24' : '#5a7090', whiteSpace: 'pre-wrap' }}>
-              <span style={{ color: '#3a4a66' }}>{l.stamp}</span>{' '}
-              {l.flag && <span style={{ color: '#ef4444' }}>[FLAGGED] </span>}
+            <div key={l.id} style={{ color: l.flag ? theme.warning : theme.muted, whiteSpace: 'pre-wrap' }}>
+              <span style={{ color: theme.dim }}>{l.stamp}</span>{' '}
+              {l.flag && <span style={{ color: theme.danger }}>[FLAGGED] </span>}
               {l.text}
             </div>
           ))}
           <span className="cursor" />
         </div>
 
-        <div style={{ marginTop: '14px', fontSize: '11px', color: '#5a7090', lineHeight: '1.6' }}>
+        <div style={{ marginTop: '14px', fontSize: '11px', color: theme.muted, lineHeight: '1.6' }}>
           Yellow = what a SOC analyst's alerts would catch. Nothing here is invisible.
         </div>
       </div>

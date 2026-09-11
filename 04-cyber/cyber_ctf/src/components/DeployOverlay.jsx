@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTheme } from '../theme.jsx';
 
 const STEPS = [
   'encrypting payload…',
@@ -10,6 +11,7 @@ const STEPS = [
 // Runs once, then calls onComplete — this is a fixed beat before the
 // P0WNED reveal, not an optional action, so there's no close button.
 export function DeployOverlay({ onComplete }) {
+  const { theme } = useTheme();
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
@@ -27,20 +29,20 @@ export function DeployOverlay({ onComplete }) {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(4, 9, 18, 0.85)',
+      position: 'fixed', inset: 0, background: theme.overlay,
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
     }}>
       <div style={{ width: '420px', maxWidth: '92vw', textAlign: 'center' }}>
-        <div style={{ fontSize: '13px', color: '#ef4444', letterSpacing: '0.3em', marginBottom: '18px', animation: 'pulse-warn 0.8s infinite' }}>
+        <div style={{ fontSize: '13px', color: theme.danger, letterSpacing: '0.3em', marginBottom: '18px', animation: 'pulse-warn 0.8s infinite' }}>
           ⚠ DEPLOYING PAYLOAD ⚠
         </div>
-        <div style={{ fontSize: '12px', color: '#8da3c0', marginBottom: '18px', fontFamily: 'monospace' }}>
+        <div style={{ fontSize: '12px', color: theme.text2, marginBottom: '18px', fontFamily: 'monospace' }}>
           {progress < 100 ? STEPS[stepIndex] : 'done.'}
         </div>
-        <div style={{ height: '10px', background: '#081320', border: '1px solid #2a4870', borderRadius: '2px', overflow: 'hidden' }}>
+        <div style={{ height: '10px', background: theme.bgDeep, border: `1px solid ${theme.borderStrong}`, borderRadius: '2px', overflow: 'hidden' }}>
           <div style={{
             height: '100%', width: `${progress}%`,
-            background: 'linear-gradient(90deg, #5b9bd5, #ef4444)',
+            background: `linear-gradient(90deg, ${theme.accent}, ${theme.danger})`,
             transition: 'width 0.09s linear',
           }} />
         </div>

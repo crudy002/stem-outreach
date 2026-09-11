@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTheme } from '../theme.jsx';
 
 const PHASES = ['dim', 'logo', '3', '2', '1', 'go'];
 const DURATIONS = { dim: 600, logo: 1600, '3': 850, '2': 850, '1': 850, go: 700 };
@@ -7,6 +8,7 @@ const DURATIONS = { dim: 600, logo: 1600, '3': 850, '2': 850, '1': 850, go: 700 
 // to 3-2-1 beat, then calls onComplete to actually start the mission
 // clock. Not skippable, same reasoning as DeployOverlay.
 export function IntroOverlay({ playerName, onComplete }) {
+  const { theme } = useTheme();
   const [phase, setPhase] = useState('dim');
 
   useEffect(() => {
@@ -28,7 +30,7 @@ export function IntroOverlay({ playerName, onComplete }) {
         position: 'fixed',
         inset: 0,
         zIndex: 200,
-        background: '#04070d',
+        background: theme.bgDeepest,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -54,7 +56,7 @@ export function IntroOverlay({ playerName, onComplete }) {
         style={{
           fontSize: '12px',
           letterSpacing: '0.35em',
-          color: '#5a7090',
+          color: theme.muted,
           marginBottom: '14px',
           opacity: showLogo ? 1 : 0,
           transition: 'opacity 0.5s ease',
@@ -70,7 +72,7 @@ export function IntroOverlay({ playerName, onComplete }) {
               fontSize: countdownLabel === 'BREACHING' ? '26px' : '64px',
               fontWeight: 'bold',
               letterSpacing: countdownLabel === 'BREACHING' ? '0.3em' : 'normal',
-              color: countdownLabel === 'BREACHING' ? '#4ade80' : '#5b9bd5',
+              color: countdownLabel === 'BREACHING' ? theme.success : theme.accent,
               animation: 'intro-pop 0.5s ease',
             }}
           >

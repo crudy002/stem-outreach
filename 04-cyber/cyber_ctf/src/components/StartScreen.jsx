@@ -1,7 +1,10 @@
+import { useTheme } from '../theme.jsx';
+
 export function StartScreen({ playerName, setPlayerName, mode, setMode, onBegin, startButtonRef }) {
+  const { theme } = useTheme();
   return (
     <div style={{ display: 'flex', justifyContent: 'center' }}>
-      <div style={{ background: '#0f1f33', border: '1px solid #1f3354', borderRadius: '4px', padding: '36px', maxWidth: '480px', width: '100%' }}>
+      <div style={{ background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: '4px', padding: '36px', maxWidth: '480px', width: '100%' }}>
         <div style={{ textAlign: 'center', marginBottom: '28px' }}>
           <img
             src="/navsea-logo.png"
@@ -9,16 +12,16 @@ export function StartScreen({ playerName, setPlayerName, mode, setMode, onBegin,
             style={{ height: '88px', width: 'auto', display: 'block', margin: '0 auto 20px' }}
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
-          <div style={{ fontSize: '11px', letterSpacing: '0.3em', color: '#5a7090', marginBottom: '6px' }}>CYBER OPERATIONS RANGE</div>
-          <div style={{ fontSize: '20px', color: '#5b9bd5', letterSpacing: '0.1em' }}>MISSION BRIEFING</div>
+          <div style={{ fontSize: '11px', letterSpacing: '0.3em', color: theme.muted, marginBottom: '6px' }}>CYBER OPERATIONS RANGE</div>
+          <div style={{ fontSize: '20px', color: theme.accent, letterSpacing: '0.1em' }}>MISSION BRIEFING</div>
         </div>
 
-        <div style={{ fontSize: '13px', lineHeight: '1.7', color: '#c8d4e3', marginBottom: '20px', textAlign: 'center' }}>
+        <div style={{ fontSize: '13px', lineHeight: '1.7', color: theme.text, marginBottom: '20px', textAlign: 'center' }}>
           Enter your callsign to start the clock and get on the leaderboard.
         </div>
 
         <div style={{ marginBottom: '24px' }}>
-          <div style={{ fontSize: '10px', color: '#5a7090', letterSpacing: '0.2em', marginBottom: '6px' }}>CALLSIGN</div>
+          <div style={{ fontSize: '10px', color: theme.muted, letterSpacing: '0.2em', marginBottom: '6px' }}>CALLSIGN</div>
           <input
             value={playerName}
             onChange={(e) => setPlayerName(e.target.value)}
@@ -30,9 +33,9 @@ export function StartScreen({ playerName, setPlayerName, mode, setMode, onBegin,
             autoFocus
             style={{
               width: '100%',
-              background: '#081320',
-              border: '1px solid #2a4870',
-              color: '#5b9bd5',
+              background: theme.bgDeep,
+              border: `1px solid ${theme.borderStrong}`,
+              color: theme.accent,
               padding: '12px 14px',
               fontFamily: 'inherit',
               fontSize: '14px',
@@ -40,13 +43,13 @@ export function StartScreen({ playerName, setPlayerName, mode, setMode, onBegin,
               boxSizing: 'border-box',
               borderRadius: '2px',
             }}
-            onFocus={(e) => e.target.style.borderColor = '#5b9bd5'}
-            onBlur={(e) => e.target.style.borderColor = '#2a4870'}
+            onFocus={(e) => e.target.style.borderColor = theme.accent}
+            onBlur={(e) => e.target.style.borderColor = theme.borderStrong}
           />
         </div>
 
         <div style={{ marginBottom: '24px' }}>
-          <div style={{ fontSize: '10px', color: '#5a7090', letterSpacing: '0.2em', marginBottom: '6px' }}>DIFFICULTY</div>
+          <div style={{ fontSize: '10px', color: theme.muted, letterSpacing: '0.2em', marginBottom: '6px' }}>DIFFICULTY</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
             <ModeButton label="EASY" sub="Guided, click-to-explore" active={mode === 'easy'} onClick={() => setMode('easy')} />
             <ModeButton label="HARD" sub="Type every command" active={mode === 'hard'} onClick={() => setMode('hard')} />
@@ -58,9 +61,9 @@ export function StartScreen({ playerName, setPlayerName, mode, setMode, onBegin,
           onClick={onBegin}
           style={{
             width: '100%',
-            background: 'linear-gradient(180deg, #152942 0%, #0f1f33 100%)',
-            border: '1px solid #5b9bd5',
-            color: playerName.trim() ? '#5b9bd5' : '#3a4a66',
+            background: `linear-gradient(180deg, ${theme.panel2} 0%, ${theme.panel} 100%)`,
+            border: `1px solid ${theme.accent}`,
+            color: playerName.trim() ? theme.accent : theme.dim,
             padding: '14px',
             fontFamily: 'inherit',
             fontSize: '13px',
@@ -70,8 +73,8 @@ export function StartScreen({ playerName, setPlayerName, mode, setMode, onBegin,
             borderRadius: '2px',
             outline: 'none',
           }}
-          onFocus={(e) => { e.target.style.borderColor = '#4ade80'; e.target.style.boxShadow = '0 0 0 2px rgba(74, 222, 128, 0.4)'; }}
-          onBlur={(e) => { e.target.style.borderColor = '#5b9bd5'; e.target.style.boxShadow = 'none'; }}
+          onFocus={(e) => { e.target.style.borderColor = theme.success; e.target.style.boxShadow = `0 0 0 2px ${theme.successGlow}`; }}
+          onBlur={(e) => { e.target.style.borderColor = theme.accent; e.target.style.boxShadow = 'none'; }}
         >
           ▶ START MISSION
         </button>
@@ -81,13 +84,14 @@ export function StartScreen({ playerName, setPlayerName, mode, setMode, onBegin,
 }
 
 function ModeButton({ label, sub, active, onClick }) {
+  const { theme } = useTheme();
   return (
     <button
       onClick={onClick}
       style={{
-        background: active ? '#152942' : 'transparent',
-        border: `1px solid ${active ? '#5b9bd5' : '#2a4870'}`,
-        color: active ? '#5b9bd5' : '#5a7090',
+        background: active ? theme.panel2 : 'transparent',
+        border: `1px solid ${active ? theme.accent : theme.borderStrong}`,
+        color: active ? theme.accent : theme.muted,
         padding: '10px 8px',
         fontFamily: 'inherit',
         cursor: 'pointer',
