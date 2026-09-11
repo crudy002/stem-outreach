@@ -19,7 +19,7 @@ const STATION_ID = import.meta.env.VITE_STATION_ID || null;
 export default function App() {
   const { theme, themeId, setThemeId } = useTheme();
   const [stage, setStage] = useState('start'); // start, login, filesystem, escalate, hacked, victory
-  const [mode, setMode] = useState('easy'); // easy: click-to-explore + one-click root. hard: type every command.
+  const [mode, setMode] = useState('easy'); // rookie: tap-to-queue command blocks, run as a program. easy: click-to-explore + one-click root. hard: type every command.
   const [playerName, setPlayerName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');

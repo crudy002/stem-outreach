@@ -54,7 +54,8 @@ export function StartScreen({
 
           <div style={{ marginBottom: '24px' }}>
             <div style={{ fontSize: '10px', color: theme.muted, letterSpacing: '0.2em', marginBottom: '6px' }}>DIFFICULTY</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+              <ModeButton label="ROOKIE" sub="Drag & drop blocks" active={mode === 'rookie'} onClick={() => setMode('rookie')} />
               <ModeButton label="EASY" sub="Guided, click-to-explore" active={mode === 'easy'} onClick={() => setMode('easy')} />
               <ModeButton label="HARD" sub="Type every command" active={mode === 'hard'} onClick={() => setMode('hard')} />
             </div>
