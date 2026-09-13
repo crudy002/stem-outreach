@@ -3,6 +3,7 @@ import { useTheme } from '../theme.jsx';
 export function LoginScreen({
   username, setUsername, password, setPassword, onLogin,
   shake, loginAttempts, passwordInputRef, authButtonRef,
+  stickyUsername, stickyPassword,
 }) {
   const { theme } = useTheme();
   return (
@@ -130,7 +131,7 @@ export function LoginScreen({
           transform: 'rotate(-3deg)',
           boxShadow: '3px 4px 10px rgba(0,0,0,0.4)',
         }}>
-          admin<br/>password
+          {stickyUsername}<br/>{stickyPassword}
           <div style={{ fontSize: '10px', marginTop: '10px', opacity: 0.75 }}>— shh, don't tell IT 🤫</div>
         </div>
 

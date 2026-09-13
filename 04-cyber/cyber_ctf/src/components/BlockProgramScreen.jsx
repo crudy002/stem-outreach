@@ -1,32 +1,80 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FILE_TREE } from '../hooks/useTerminal';
 import { useTheme } from '../theme.jsx';
 
-// ROOKIE mode: big, colorful, chunky blocks that fire immediately on tap —
-// no separate "build a queue then press run" step, that felt like extra
-// homework before anything happened. Each tap both runs the action via
-// useTerminal (viewFile/unlockRoot, so mission state stays in sync with the
-// other modes) and appends a piece to a growing "mission chain" so kids
-// still see a program assembling itself, just without the delay.
+// ROOKIE mode: big, colorful blocks that fire immediately on tap (no
+// build-a-queue-then-run step). Two things layer on top of that base loop:
+//  - Every file teaches a short lesson when peeked, not just the one with
+//    the password, so wrong taps still pay off and the sidebar always has
+//    something specific to show ("visibility").
+//  - Reaching root requires a one-time access code that's shown briefly and
+//    then hidden, so repeat booth visitors who've memorized "which box to
+//    click" still have to actually pay attention at the end, not just recall
+//    a click pattern.
+const LESSONS = {
+  'README.txt': 'Recon first — real attackers read the docs before touching anything.',
+  'logs/access.log': "Logs like this are how defenders catch intruders after the fact. Don't skip monitoring!",
+  'config/network.conf': 'Network configs reveal how a system talks to others — attackers scout these too.',
+  'config/credentials.txt': "Found it! Never store real passwords in plain text — that's exactly how breaches like this happen.",
+  'projects/notes.md': 'To-do notes and sticky reminders leak secrets by accident all the time.',
+};
+
+const shuffle = (arr) => [...arr].sort(() => Math.random() - 0.5);
+
+const generateAccessCode = () => {
+  const code = 100 + Math.floor(Math.random() * 900);
+  const decoys = new Set();
+  while (decoys.size < 2) {
+    const d = 100 + Math.floor(Math.random() * 900);
+    if (d !== code) decoys.add(d);
+  }
+  return { code, options: shuffle([code, ...decoys]) };
+};
+
 export function BlockProgramScreen({ terminal }) {
   const { theme } = useTheme();
   const { FLAG, terminalOutput, foundCreds, copiedFlag, hasCopiedFlag, terminalRef, copyToClipboard } = terminal;
   const [chain, setChain] = useState([]);
+  const [lastLesson, setLastLesson] = useState(null);
+  const [accessCode, setAccessCode] = useState(null); // { code, options, revealed }
+  const [wrongPick, setWrongPick] = useState(false);
 
   const executedPaths = new Set(chain.filter((b) => b.kind === 'read').map((b) => b.path));
   const unlockDone = chain.some((b) => b.kind === 'unlock');
 
+  useEffect(() => {
+    if (foundCreds && !accessCode) {
+      const generated = generateAccessCode();
+      setAccessCode({ ...generated, revealed: true });
+      setTimeout(() => setAccessCode((prev) => (prev ? { ...prev, revealed: false } : prev)), 5000);
+    }
+  }, [foundCreds, accessCode]);
+
   const runFile = (node) => {
     if (executedPaths.has(node.path)) return;
     terminal.viewFile(node.path);
-    setChain((prev) => [...prev, { kind: 'read', path: node.path, name: node.name, cmd: `cat ${node.path}` }]);
+    setChain((prev) => [...prev, { kind: 'read', path: node.path, name: node.name }]);
+    setLastLesson(LESSONS[node.path] || null);
   };
 
-  const runUnlock = () => {
-    if (!foundCreds || unlockDone) return;
-    terminal.unlockRoot();
-    setChain((prev) => [...prev, { kind: 'unlock', name: 'Unlock root', cmd: 'sudo su' }]);
+  const peekCode = () => {
+    setAccessCode((prev) => (prev ? { ...prev, revealed: true } : prev));
+    setTimeout(() => setAccessCode((prev) => (prev ? { ...prev, revealed: false } : prev)), 3000);
   };
+
+  const pickCode = (value) => {
+    if (!accessCode) return;
+    if (value === accessCode.code) {
+      terminal.unlockRoot();
+      setChain((prev) => [...prev, { kind: 'unlock', name: 'Unlock root' }]);
+    } else {
+      setWrongPick(true);
+      peekCode();
+      setTimeout(() => setWrongPick(false), 1600);
+    }
+  };
+
+  const rootLevelNodes = Object.values(FILE_TREE.children);
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '20px' }}>
@@ -38,42 +86,88 @@ export function BlockProgramScreen({ terminal }) {
       `}</style>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div style={{ background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: '8px', padding: '20px' }}>
-          <div style={{ fontSize: '13px', color: theme.accent, letterSpacing: '0.1em', marginBottom: '16px', fontWeight: 'bold' }}>🧩 MISSION BLOCKS — tap to run</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            {Object.values(FILE_TREE.children).map((node) =>
-              node.type === 'file' ? (
-                <div key={node.path} style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-                  <FileBlock node={node} done={executedPaths.has(node.path)} onClick={() => runFile(node)} />
-                </div>
-              ) : (
-                <FolderGroup key={node.path} node={node} executedPaths={executedPaths} onRun={runFile} />
-              )
-            )}
-          </div>
+        {/* Step 1: explore files */}
+        <div style={{ background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: '8px', padding: '18px' }}>
+          <div style={{ fontSize: '13px', color: theme.accent, letterSpacing: '0.1em', marginBottom: '4px', fontWeight: 'bold' }}>🧩 STEP 1 — EXPLORE THE FILES</div>
+          <div style={{ fontSize: '11px', color: theme.text2, marginBottom: '14px' }}>Tap a block to peek inside. One of them is hiding a password.</div>
 
-          <div style={{ marginTop: '18px', paddingTop: '16px', borderTop: `1px dashed ${theme.borderStrong}` }}>
-            <UnlockBlock enabled={foundCreds && !unlockDone} done={unlockDone} onClick={runUnlock} />
+          <div style={{ maxHeight: '420px', overflowY: 'auto', paddingRight: '4px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '10px', alignItems: 'start' }}>
+              {rootLevelNodes.map((node) =>
+                node.type === 'file' ? (
+                  <FileBlock key={node.path} node={node} done={executedPaths.has(node.path)} onClick={() => runFile(node)} />
+                ) : (
+                  <FolderCells key={node.path} node={node} executedPaths={executedPaths} onRun={runFile} />
+                )
+              )}
+            </div>
           </div>
         </div>
 
-        <div style={{ background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: '8px', padding: '18px' }}>
-          <div style={{ fontSize: '11px', color: theme.muted, letterSpacing: '0.2em', marginBottom: '12px' }}>YOUR MISSION SO FAR</div>
-          {chain.length === 0 ? (
-            <div style={{ fontSize: '12px', color: theme.dim }}>Tap a block above to get started.</div>
-          ) : (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+        {/* Step 2: final access-code gate */}
+        <div style={{ background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: '8px', padding: '18px', opacity: foundCreds ? 1 : 0.5 }}>
+          <div style={{ fontSize: '13px', color: theme.warning, letterSpacing: '0.1em', marginBottom: '4px', fontWeight: 'bold' }}>🔐 STEP 2 — FINAL ACCESS CODE</div>
+
+          {!foundCreds && (
+            <div style={{ fontSize: '11px', color: theme.dim, marginTop: '8px' }}>Locked — find the password first.</div>
+          )}
+
+          {foundCreds && !unlockDone && accessCode && (
+            <div style={{ marginTop: '10px' }}>
+              <div style={{ fontSize: '11px', color: theme.text2, marginBottom: '10px' }}>
+                {wrongPick ? "Not quite — here's the code again, watch closely!" : 'Memorize this code, then pick it below to authorize root access.'}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '14px' }}>
+                <div
+                  style={{
+                    fontSize: '28px', fontWeight: 'bold', letterSpacing: '0.2em', fontFamily: 'monospace',
+                    color: accessCode.revealed ? theme.warning : theme.dim,
+                    filter: accessCode.revealed ? 'none' : 'blur(6px)',
+                    padding: '6px 18px', background: theme.bgDeep, border: `2px solid ${theme.warning}`, borderRadius: '8px',
+                    userSelect: 'none',
+                  }}
+                >
+                  {accessCode.code}
+                </div>
+                {!accessCode.revealed && (
+                  <button onClick={peekCode} className="rookie-block" style={{ background: 'transparent', border: `1px solid ${theme.borderStrong}`, color: theme.muted, padding: '8px 12px', fontFamily: 'inherit', fontSize: '11px', cursor: 'pointer', borderRadius: '6px' }}>
+                    👀 Peek again
+                  </button>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                {accessCode.options.map((opt) => (
+                  <button
+                    key={opt}
+                    className="rookie-block"
+                    onClick={() => pickCode(opt)}
+                    style={{
+                      flex: 1, background: theme.bgDeep, border: `2px solid ${theme.accent}`, color: theme.text,
+                      padding: '14px', fontFamily: 'monospace', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', borderRadius: '8px',
+                    }}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {unlockDone && (
+            <div style={{ marginTop: '10px', fontSize: '13px', color: theme.success, fontWeight: 'bold' }}>✅ Root access granted!</div>
+          )}
+        </div>
+
+        {/* Activity feed: mission chain + raw terminal, one bounded panel */}
+        <div ref={terminalRef} style={{ background: theme.bgDeep, border: `1px solid ${theme.border}`, borderRadius: '8px', padding: '16px', height: '180px', overflowY: 'auto' }}>
+          <div style={{ fontSize: '10px', color: theme.muted, letterSpacing: '0.2em', marginBottom: '10px' }}>🖥 WHAT THE COMPUTER SEES</div>
+
+          {chain.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center', marginBottom: '12px' }}>
               {chain.map((block, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {i > 0 && <span style={{ color: theme.dim }}>→</span>}
-                  <div
-                    className="rookie-chain-item"
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '6px', background: theme.bgDeep,
-                      border: `2px solid ${block.kind === 'unlock' ? theme.warning : theme.success}`, borderRadius: '20px',
-                      padding: '6px 14px', fontSize: '12px', color: theme.text,
-                    }}
-                  >
+                  <div className="rookie-chain-item" style={{ display: 'flex', alignItems: 'center', gap: '6px', border: `2px solid ${block.kind === 'unlock' ? theme.warning : theme.success}`, borderRadius: '20px', padding: '4px 12px', fontSize: '11px', color: theme.text }}>
                     <span>{block.kind === 'unlock' ? '🔓' : '✅'}</span>
                     <span>{block.kind === 'unlock' ? 'Unlock root' : block.name}</span>
                   </div>
@@ -81,13 +175,7 @@ export function BlockProgramScreen({ terminal }) {
               ))}
             </div>
           )}
-        </div>
 
-        <div
-          ref={terminalRef}
-          style={{ background: theme.bgDeep, border: `1px solid ${theme.border}`, borderRadius: '8px', padding: '16px', minHeight: '140px', maxHeight: '200px', overflowY: 'auto' }}
-        >
-          <div style={{ fontSize: '10px', color: theme.muted, letterSpacing: '0.2em', marginBottom: '8px' }}>🖥 WHAT THE COMPUTER SEES</div>
           <div style={{ fontSize: '12px', lineHeight: '1.7', color: theme.text2, whiteSpace: 'pre-wrap' }}>
             {terminalOutput.length === 0 && <div style={{ color: theme.dim }}>Nothing yet — start tapping blocks!</div>}
             {terminalOutput.map((line, i) => (
@@ -118,16 +206,14 @@ export function BlockProgramScreen({ terminal }) {
           <div style={{ fontSize: '11px', color: theme.muted, letterSpacing: '0.2em', marginBottom: '12px' }}>OBJECTIVES</div>
           <div style={{ fontSize: '12px', lineHeight: '1.8' }}>
             <div style={{ color: foundCreds ? theme.success : theme.text }}>{foundCreds ? '✓' : '◯'} Find something useful in the files</div>
-            <div style={{ color: foundCreds ? theme.warning : theme.dim }}>◯ Unlock root access</div>
+            <div style={{ color: unlockDone ? theme.success : foundCreds ? theme.warning : theme.dim }}>{unlockDone ? '✓' : '◯'} Enter the access code to unlock root</div>
           </div>
         </div>
 
         <div style={{ background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: '8px', padding: '16px' }}>
-          <div style={{ fontSize: '11px', color: theme.warning, letterSpacing: '0.2em', marginBottom: '10px' }}>⚠ INTEL DROP</div>
+          <div style={{ fontSize: '11px', color: theme.warning, letterSpacing: '0.2em', marginBottom: '10px' }}>💡 LESSON LEARNED</div>
           <div style={{ fontSize: '12px', color: theme.text2, lineHeight: '1.6' }}>
-            {!foundCreds
-              ? <>Tap the blocks to peek inside each file. One of them is hiding a password!</>
-              : <>Found it! Now tap <span style={{ color: theme.warning }}>🔓 Unlock Root Access</span> to finish the job.</>}
+            {lastLesson || 'Tap a file block to find out what it teaches.'}
           </div>
         </div>
       </div>
@@ -135,18 +221,16 @@ export function BlockProgramScreen({ terminal }) {
   );
 }
 
-function FolderGroup({ node, executedPaths, onRun }) {
+function FolderCells({ node, executedPaths, onRun }) {
   const { theme } = useTheme();
   const children = Object.values(node.children);
   return (
-    <div>
-      <div style={{ fontSize: '11px', color: theme.muted, letterSpacing: '0.1em', marginBottom: '8px' }}>📁 {node.name}/</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-        {children.map((child) => (
-          <FileBlock key={child.path} node={child} done={executedPaths.has(child.path)} onClick={() => onRun(child)} />
-        ))}
-      </div>
-    </div>
+    <>
+      <div style={{ gridColumn: '1 / -1', fontSize: '11px', color: theme.muted, letterSpacing: '0.1em', marginTop: '6px' }}>📁 {node.name}/</div>
+      {children.map((child) => (
+        <FileBlock key={child.path} node={child} done={executedPaths.has(child.path)} onClick={() => onRun(child)} />
+      ))}
+    </>
   );
 }
 
@@ -161,38 +245,14 @@ function FileBlock({ node, done, onClick }) {
         background: done ? theme.panel2 : theme.bgDeep,
         border: `2px solid ${done ? theme.success : theme.accent}`,
         color: done ? theme.success : theme.text,
-        padding: '14px 16px', fontFamily: 'inherit', cursor: done ? 'default' : 'pointer',
-        borderRadius: '10px', textAlign: 'left', minWidth: '170px',
+        padding: '12px 14px', fontFamily: 'inherit', cursor: done ? 'default' : 'pointer',
+        borderRadius: '10px', textAlign: 'left', minHeight: '60px', width: '100%', boxSizing: 'border-box',
+        display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '4px',
         boxShadow: done ? 'none' : `0 3px 0 ${theme.borderStrong}`,
       }}
     >
-      <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{done ? '✅' : '📄'} Peek inside {node.name}</div>
-      <div style={{ fontSize: '10px', color: theme.dim, fontFamily: 'monospace', marginTop: '4px' }}>cat {node.path}</div>
-    </button>
-  );
-}
-
-function UnlockBlock({ enabled, done, onClick }) {
-  const { theme } = useTheme();
-  const disabled = !enabled || done;
-  return (
-    <button
-      className="rookie-block"
-      onClick={onClick}
-      disabled={disabled}
-      title={!enabled && !done ? 'Find something useful first' : ''}
-      style={{
-        background: done ? theme.panel2 : disabled ? 'transparent' : theme.panel2,
-        border: `2px solid ${done ? theme.success : disabled ? theme.dim : theme.warning}`,
-        color: done ? theme.success : disabled ? theme.dim : theme.warning,
-        padding: '16px 20px', fontFamily: 'inherit', cursor: disabled ? 'not-allowed' : 'pointer',
-        borderRadius: '10px', textAlign: 'left', minWidth: '220px', fontSize: '15px', fontWeight: 'bold',
-        boxShadow: disabled ? 'none' : `0 3px 0 ${theme.warning}55`,
-        animation: enabled && !done ? 'pulse-warn 1.6s infinite' : 'none',
-      }}
-    >
-      <div>{done ? '✅' : enabled ? '🔓' : '🔒'} Unlock Root Access</div>
-      <div style={{ fontSize: '10px', color: theme.dim, fontFamily: 'monospace', marginTop: '4px', fontWeight: 'normal' }}>sudo su</div>
+      <div style={{ fontSize: '13px', fontWeight: 'bold' }}>{done ? '✅' : '📄'} {node.name}</div>
+      <div style={{ fontSize: '9px', color: theme.dim, fontFamily: 'monospace' }}>cat {node.path}</div>
     </button>
   );
 }

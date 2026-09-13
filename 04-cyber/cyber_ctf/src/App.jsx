@@ -16,6 +16,15 @@ import { ElapsedTimer } from './components/ElapsedTimer';
 const API_BASE = import.meta.env.VITE_LEADERBOARD_API_URL || 'http://localhost:8000';
 const STATION_ID = import.meta.env.VITE_STATION_ID || null;
 
+// Rotated per playthrough so repeat visitors can't just muscle-memory
+// "admin"/"password" without reading the sticky note.
+const USERNAME_POOL = ['admin', 'operator', 'sysadmin', 'itguy', 'rootuser'];
+const PASSWORD_POOL = ['sunshine1', 'dragon22', 'starfish7', 'rocket99', 'blueSky3', 'tigerPaw5'];
+const randomCreds = () => ({
+  username: USERNAME_POOL[Math.floor(Math.random() * USERNAME_POOL.length)],
+  password: PASSWORD_POOL[Math.floor(Math.random() * PASSWORD_POOL.length)],
+});
+
 export default function App() {
   const { theme, themeId, setThemeId } = useTheme();
   const [stage, setStage] = useState('start'); // start, login, filesystem, escalate, hacked, victory
@@ -24,6 +33,7 @@ export default function App() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginAttempts, setLoginAttempts] = useState(0);
+  const [correctCreds, setCorrectCreds] = useState(randomCreds);
   const [shake, setShake] = useState(false);
   const [escalateInput, setEscalateInput] = useState('');
   const [escalated, setEscalated] = useState(false);
@@ -108,7 +118,7 @@ export default function App() {
   };
 
   const tryLogin = () => {
-    if (username.toLowerCase() === 'admin' && password.toLowerCase() === 'password') {
+    if (username.toLowerCase() === correctCreds.username && password.toLowerCase() === correctCreds.password.toLowerCase()) {
       setStage('filesystem');
       setProgress(40);
     } else {
@@ -138,6 +148,7 @@ export default function App() {
     setUsername('');
     setPassword('');
     setLoginAttempts(0);
+    setCorrectCreds(randomCreds());
     terminal.reset();
     setEscalateInput('');
     setEscalated(false);
@@ -276,6 +287,8 @@ export default function App() {
           loginAttempts={loginAttempts}
           passwordInputRef={passwordInputRef}
           authButtonRef={authButtonRef}
+          stickyUsername={correctCreds.username}
+          stickyPassword={correctCreds.password}
         />
       )}
 
