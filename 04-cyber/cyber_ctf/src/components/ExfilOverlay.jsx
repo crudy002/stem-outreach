@@ -1,22 +1,25 @@
 import { useEffect, useState } from 'react';
 import { useTheme } from '../theme.jsx';
 
-const FILES = [
-  { name: 'config/credentials.txt', size: 1 },
+// The first entry is the file the player actually found this run, so the
+// loot list can't name a path that wasn't on their box.
+const buildFiles = (flagPath) => [
+  { name: flagPath, size: 1 },
   { name: 'backup/private_keys.tar.gz', size: 3 },
   { name: 'financial_q3_report.xlsx', size: 12 },
   { name: 'customer_ssn_export.csv', size: 46 },
   { name: 'employee_records.db', size: 128 },
 ];
-const TOTAL = FILES.reduce((sum, f) => sum + f.size, 0);
-const THRESHOLDS = FILES.reduce((acc, f) => {
-  const prev = acc.length ? acc[acc.length - 1] : 0;
-  acc.push(prev + (f.size / TOTAL) * 100);
-  return acc;
-}, []);
 
-export function ExfilOverlay({ onClose }) {
+export function ExfilOverlay({ onClose, flagPath = 'config/credentials.txt' }) {
   const { theme } = useTheme();
+  const FILES = buildFiles(flagPath);
+  const TOTAL = FILES.reduce((sum, f) => sum + f.size, 0);
+  const THRESHOLDS = FILES.reduce((acc, f) => {
+    const prev = acc.length ? acc[acc.length - 1] : 0;
+    acc.push(prev + (f.size / TOTAL) * 100);
+    return acc;
+  }, []);
   const [progress, setProgress] = useState(0);
   const done = progress >= 100;
 

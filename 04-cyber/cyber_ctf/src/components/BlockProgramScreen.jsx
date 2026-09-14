@@ -1,23 +1,20 @@
 import { useEffect, useState } from 'react';
-import { FILE_TREE } from '../hooks/useTerminal';
+import { SecretChip } from './SecretChip';
 import { useTheme } from '../theme.jsx';
 
 // ROOKIE mode: big, colorful blocks that fire immediately on tap (no
-// build-a-queue-then-run step). Two things layer on top of that base loop:
+// build-a-queue-then-run step). Three things layer on top of that base loop:
 //  - Every file teaches a short lesson when peeked, not just the one with
 //    the password, so wrong taps still pay off and the sidebar always has
-//    something specific to show ("visibility").
+//    something specific to show ("visibility"). The lesson text now travels
+//    with the file itself, because the password's file moves between runs.
+//  - Several files hold decoy secrets. The 🦸 superhero badge marks the one
+//    that actually works, so the decoys add texture without stranding a
+//    six-year-old.
 //  - Reaching root requires a one-time access code that's shown briefly and
 //    then hidden, so repeat booth visitors who've memorized "which box to
 //    click" still have to actually pay attention at the end, not just recall
 //    a click pattern.
-const LESSONS = {
-  'README.txt': 'Recon first — real attackers read the docs before touching anything.',
-  'logs/access.log': "Logs like this are how defenders catch intruders after the fact. Don't skip monitoring!",
-  'config/network.conf': 'Network configs reveal how a system talks to others — attackers scout these too.',
-  'config/credentials.txt': "Found it! Never store real passwords in plain text — that's exactly how breaches like this happen.",
-  'projects/notes.md': 'To-do notes and sticky reminders leak secrets by accident all the time.',
-};
 
 const shuffle = (arr) => [...arr].sort(() => Math.random() - 0.5);
 
@@ -33,7 +30,7 @@ const generateAccessCode = () => {
 
 export function BlockProgramScreen({ terminal }) {
   const { theme } = useTheme();
-  const { FLAG, terminalOutput, foundCreds, copiedFlag, hasCopiedFlag, terminalRef, copyToClipboard } = terminal;
+  const { fileTree, lessonFor, terminalOutput, foundCreds, copiedValue, hasCopiedRoot, terminalRef, copyToClipboard } = terminal;
   const [chain, setChain] = useState([]);
   const [lastLesson, setLastLesson] = useState(null);
   const [accessCode, setAccessCode] = useState(null); // { code, options, revealed }
@@ -54,7 +51,7 @@ export function BlockProgramScreen({ terminal }) {
     if (executedPaths.has(node.path)) return;
     terminal.viewFile(node.path);
     setChain((prev) => [...prev, { kind: 'read', path: node.path, name: node.name }]);
-    setLastLesson(LESSONS[node.path] || null);
+    setLastLesson(lessonFor(node.path));
   };
 
   const peekCode = () => {
@@ -74,7 +71,7 @@ export function BlockProgramScreen({ terminal }) {
     }
   };
 
-  const rootLevelNodes = Object.values(FILE_TREE.children);
+  const rootLevelNodes = Object.values(fileTree.children);
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '20px' }}>
@@ -89,7 +86,7 @@ export function BlockProgramScreen({ terminal }) {
         {/* Step 1: explore files */}
         <div style={{ background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: '8px', padding: '18px' }}>
           <div style={{ fontSize: '13px', color: theme.accent, letterSpacing: '0.1em', marginBottom: '4px', fontWeight: 'bold' }}>🧩 STEP 1 — EXPLORE THE FILES</div>
-          <div style={{ fontSize: '11px', color: theme.text2, marginBottom: '14px' }}>Tap a block to peek inside. One of them is hiding a password.</div>
+          <div style={{ fontSize: '11px', color: theme.text2, marginBottom: '14px' }}>Tap a block to peek inside. Lots of them hide a secret — only one is the 🦸 superuser password.</div>
 
           <div style={{ maxHeight: '420px', overflowY: 'auto', paddingRight: '4px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '10px', alignItems: 'start' }}>
@@ -181,18 +178,18 @@ export function BlockProgramScreen({ terminal }) {
             {terminalOutput.map((line, i) => (
               <div key={i} style={{ color: line.type === 'cmd' ? theme.accent : theme.text2, marginBottom: line.type === 'out' ? '8px' : '0' }}>
                 {line.text}
-                {line.flag && (
-                  <div style={{ marginTop: '6px' }}>
-                    <button
-                      onClick={() => copyToClipboard(FLAG)}
-                      style={{
-                        background: 'transparent', border: `1px solid ${theme.borderStrong}`, color: copiedFlag ? theme.success : theme.accent,
-                        padding: '4px 10px', fontFamily: 'inherit', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', borderRadius: '2px',
-                        animation: !hasCopiedFlag ? 'pulse-warn 1.3s infinite' : 'none',
-                      }}
-                    >
-                      {copiedFlag ? '✓ Copied!' : '📋 Copy Flag'}
-                    </button>
+                {line.secrets?.length > 0 && (
+                  <div style={{ marginTop: '6px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {line.secrets.map((secret) => (
+                      <SecretChip
+                        key={secret.value}
+                        secret={secret}
+                        badged={secret.isRoot}
+                        copied={copiedValue === secret.value}
+                        nudge={secret.isRoot && !hasCopiedRoot}
+                        onCopy={() => copyToClipboard(secret.value)}
+                      />
+                    ))}
                   </div>
                 )}
               </div>
@@ -205,7 +202,7 @@ export function BlockProgramScreen({ terminal }) {
         <div style={{ background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: '8px', padding: '16px' }}>
           <div style={{ fontSize: '11px', color: theme.muted, letterSpacing: '0.2em', marginBottom: '12px' }}>OBJECTIVES</div>
           <div style={{ fontSize: '12px', lineHeight: '1.8' }}>
-            <div style={{ color: foundCreds ? theme.success : theme.text }}>{foundCreds ? '✓' : '◯'} Find something useful in the files</div>
+            <div style={{ color: foundCreds ? theme.success : theme.text }}>{foundCreds ? '✓' : '◯'} Find the 🦸 superuser password</div>
             <div style={{ color: unlockDone ? theme.success : foundCreds ? theme.warning : theme.dim }}>{unlockDone ? '✓' : '◯'} Enter the access code to unlock root</div>
           </div>
         </div>

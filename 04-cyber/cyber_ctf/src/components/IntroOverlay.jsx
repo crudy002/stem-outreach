@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTheme } from '../theme.jsx';
 
 const PHASES = ['dim', 'logo', '3', '2', '1', 'go'];
-const DURATIONS = { dim: 600, logo: 1600, '3': 850, '2': 850, '1': 850, go: 700 };
+const DURATIONS = { dim: 500, logo: 1500, '3': 450 , '2': 450, '1': 450, go: 700 };
 
 // Runs once between the callsign screen and login — a fixed dim-to-logo
 // to 3-2-1 beat, then calls onComplete to actually start the mission

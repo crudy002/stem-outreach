@@ -5,6 +5,11 @@ DONE
       place and rank among themselves.)
 - [x] Exfil / payload-deploy animations (ExfilOverlay, DeployOverlay,
       LogsOverlay on the elevated-terminal screen).
+- [x] Sticky note flips over on tap/hover, with an idle wobble to invite it
+      and an auto-flip fallback so nobody stalls at the login screen.
+- [x] Root password moves between runs (5 hiding spots) and 4 decoy secrets
+      sit in the other files. The 🦸 superuser badge marks the real one in
+      rookie/easy; hard mode gets no badge and has to read the labels.
 
 NEXT
 - Add some "FAIL" conditions where the user gets "Caught" by intrusion detection system

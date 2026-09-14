@@ -38,8 +38,34 @@ the player and it.
 | `easy`   | Click files in a browser sidebar, one-click root unlock  | Middle ground   |
 | `hard`   | Type every command in the simulated shell                | Anyone who can type |
 
+### The search
+
+The root password **moves between playthroughs**. It lands in one of five
+files, one of which is in a folder that only exists on those runs, so a
+repeat visitor can't skip the searching by remembering a path.
+
+Several other files hold **decoy secrets** that look just as much like the
+answer: a wifi password, a service account's database password, an API key,
+and an old root password that a log says was already rotated out. None of
+them opens `sudo`. Finding *a* secret is not the same as finding *the*
+secret, which is the lesson.
+
+Every password-shaped value in command output gets its own copy chip, so
+the copy button itself never gives the answer away. What separates the
+modes is the **🦸 superhero badge**:
+
+- `rookie` and `easy` badge the one that actually works, and in `easy` the
+  root unlock button stays disabled until that specific value is copied.
+  Copying a decoy does nothing.
+- `hard` badges nothing. Every chip looks identical and the player has to
+  read the labels and work out which secret is the root password.
+
+Guessing wrong isn't a dead end: `sudo` allows three attempts and says
+"Sorry, try again", and enough failures surface the CALL FOR BACKUP panel
+described below.
+
 **Each mode has its own leaderboard.** A rookie tapping blocks will always
-be faster than someone typing `cat config/credentials.txt` by hand, so a
+be faster than someone typing `grep password config/backup.conf` by hand, so a
 single mixed board would just rank players by difficulty. Scores are
 submitted with their mode and ranked only against the same mode. The board
 on the briefing screen follows whichever difficulty is currently selected.
@@ -53,16 +79,18 @@ on the briefing screen follows whichever difficulty is currently selected.
    playthrough** from a small pool, so repeat visitors can't muscle-memory
    their way in. Whatever the current pair is, it's written on the sticky
    note in the right-hand panel. That's the lesson.
-3. **File system** — the goal is `config/credentials.txt`, which contains
-   the flag `ctf{w34k_p455w0rd5_4r3_b4d}`.
-   - `hard`: `ls`, `ls config/`, then `cat config/credentials.txt` (or
-     `grep password config/credentials.txt`). The shell also supports `cd`,
-     `pwd`, `head`, `find`, `file`, `whoami`, `id`, `history`, `man <cmd>`,
-     `clear`, `help`, Tab-completion, and ↑/↓ for command history.
-   - `easy`: click the file in the sidebar; it runs `cat` for you.
-   - `rookie`: tap the file block. Every file teaches a one-line lesson when
-     opened, not just the one holding the password.
-4. **Escalate** — use the 📋 Copy Flag button on that output, then:
+3. **File system** — find the root password, `ctf{w34k_p455w0rd5_4r3_b4d}`.
+   **It is not in the same file twice** (see "The search" below), so there's
+   no single path to memorise.
+   - `hard`: `ls`, then `cd`/`ls` into each folder and `cat` what looks
+     promising. `grep password <file>` is the fast way. The shell also
+     supports `pwd`, `head`, `find`, `file`, `whoami`, `id`, `history`,
+     `man <cmd>`, `clear`, `help`, Tab-completion, and ↑/↓ for history.
+   - `easy`: click files in the sidebar; each one runs `cat` for you.
+   - `rookie`: tap the file blocks. Every file teaches a one-line lesson
+     when opened, not just the one holding the password.
+4. **Escalate** — copy the root password using the chip under that output,
+   then:
    - `hard`: run `sudo su` and paste the flag at the masked password prompt
      (3 attempts, like a real terminal).
    - `easy`: hit "🔓 Unlock Root Access", which types it in for you.
@@ -114,10 +142,16 @@ cyber_ctf/
     └── components/             # one file per screen/overlay
 ```
 
-The two files worth knowing: **`useTerminal.js`** holds the fake file
-system, the command parser, and the flag, so that's where you go to change
-what the challenge actually *is*. **`App.jsx`** owns which stage is on
-screen, the run timer, and leaderboard submission.
+The two files worth knowing: **`useTerminal.js`** holds the file system,
+the hiding spots, the decoys, the command parser, and the flag, so that's
+where you go to change what the challenge actually *is*. **`App.jsx`** owns
+which stage is on screen, the run timer, and leaderboard submission.
+
+To add a hiding spot or a decoy, edit `HIDING_SPOTS` or `BASE_FILES` at the
+top of `useTerminal.js`. Each entry carries its own body text and the
+one-line lesson rookie mode shows, and directory markers are derived from
+the paths, so a spot in a brand-new folder works without touching anything
+else.
 
 (This used to all live in one `App.jsx`. It was split up once it stopped
 fitting on a screen; the behaviour didn't change.)

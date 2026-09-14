@@ -60,7 +60,7 @@ export default function App() {
     onCredentialsFound: () => setProgress(60),
     onRootAccess: () => { setStage('escalate'); setProgress(80); setRootReachedAt(Date.now()); },
   });
-  const { foundCreds, assisted, commandInputRef } = terminal;
+  const { foundCreds, assisted, commandInputRef, flagPath } = terminal;
 
   useEffect(() => {
     if (stage === 'filesystem' && commandInputRef.current) commandInputRef.current.focus();
@@ -321,7 +321,7 @@ export default function App() {
 
       {stage === 'filesystem' && <FilesystemScreen terminal={terminal} mode={mode} />}
 
-      {stage === 'escalate' && <EscalateScreen onInject={() => runEscalation('inject')} />}
+      {stage === 'escalate' && <EscalateScreen onInject={() => runEscalation('inject')} flagPath={flagPath} />}
 
       {stage === 'hacked' && (
         <HackedScreen

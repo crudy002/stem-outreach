@@ -1,35 +1,125 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
-const fileSystem = {
-  'README.txt': 'Welcome to the system.\n\nThis is a training environment for STEM Outreach.\nLook around. Some files contain sensitive info.',
-  'logs/': null,
-  'logs/access.log': '2026-05-09 14:22:11 LOGIN admin from 192.168.1.42\n2026-05-09 14:22:18 SUDO admin\n2026-05-09 14:22:33 LOGIN admin from 192.168.1.42',
-  'config/': null,
-  'config/credentials.txt': '# DO NOT COMMIT THIS FILE\nroot_user=root\nroot_password=ctf{w34k_p455w0rd5_4r3_b4d}',
-  'config/network.conf': 'interface=eth0\nip=192.168.1.42\ngateway=192.168.1.1',
-  'projects/': null,
-  'projects/notes.md': 'Reminder: rotate the root password.\nAlso need to fix that thing in credentials.txt.',
-};
 const FLAG = 'ctf{w34k_p455w0rd5_4r3_b4d}';
+
+// Files that are always on the box. Each carries its own one-line lesson,
+// because ROOKIE mode used to key those off hard-coded paths and the
+// password's file now moves between runs.
+//
+// Three of these hold deliberate decoys: a wifi password, a service
+// account password, an API key, and a rotated-out old root password. None
+// of them opens sudo. Finding a secret is not the same as finding THE
+// secret, which is the whole point — read what it's labelled.
+const BASE_FILES = [
+  {
+    path: 'README.txt',
+    body: 'Welcome to the system.\n\nThis is a training environment for STEM Outreach.\nLook around. Some files contain sensitive info.',
+    lesson: 'Recon first — real attackers read the docs before touching anything.',
+  },
+  {
+    path: 'logs/access.log',
+    body: '2026-05-09 14:22:11 LOGIN admin from 192.168.1.42\n2026-05-09 14:22:18 SUDO admin\n2026-05-09 14:22:33 LOGIN admin from 192.168.1.42\n# rotated on 2026-04-01, no longer accepted:\nold_root_password=hunter2',
+    lesson: "Logs are how defenders catch intruders after the fact. This one also leaks an OLD password — rotating a password only helps if you scrub it from the places it leaked.",
+  },
+  {
+    path: 'config/network.conf',
+    body: 'interface=eth0\nip=192.168.1.42\ngateway=192.168.1.1\nwifi_password=GuestLounge2019',
+    lesson: 'Network configs show how a system talks to others. A wifi password is a real secret — just not the one that makes you root.',
+  },
+  {
+    path: 'config/service.conf',
+    body: '# background job runner\nservice_user=app\ndb_password=app_svc_9021\nretries=3',
+    lesson: 'Service accounts have their own passwords. Grabbing the first one you see is how attackers waste hours.',
+  },
+  {
+    path: 'projects/notes.md',
+    body: "Reminder: rotate the root password.\nAlso need to fix that thing in the config files.\n\napi_key=sk_live_2f9d41ba77c3",
+    lesson: 'To-do notes and sticky reminders leak secrets by accident all the time.',
+  },
+];
+
+// Where the root password hides. Picked fresh every run so a repeat booth
+// visitor can't just remember "it's in config/credentials.txt" and skip
+// the actual searching.
+const HIDING_SPOTS = [
+  {
+    path: 'config/credentials.txt',
+    body: (pw) => `# DO NOT COMMIT THIS FILE\nroot_user=root\nroot_password=${pw}`,
+    lesson: "Found it! Never store real passwords in plain text — that's exactly how breaches like this happen.",
+  },
+  {
+    path: 'config/backup.conf',
+    body: (pw) => `# emergency restore settings\nrestore_target=/dev/sda1\nroot_password=${pw}`,
+    lesson: 'Found it! Backup and restore configs are a classic hiding place — everyone forgets they contain live credentials.',
+  },
+  {
+    path: 'projects/handoff.md',
+    body: (pw) => `Handing this box over to the new admin.\nEverything you need is here:\n\nroot_password=${pw}\n\nTODO: delete this file once you've memorised it.`,
+    lesson: "Found it! That TODO never gets done. Handover notes outlive the handover.",
+  },
+  {
+    path: 'logs/install.log',
+    body: (pw) => `[ok] packages installed\n[ok] user root configured\n[warn] plaintext secret written to log:\nroot_password=${pw}\n[ok] install complete`,
+    lesson: 'Found it! Installers log more than they should, and nobody reads install logs — except attackers.',
+  },
+  {
+    path: 'backup/env.bak',
+    body: (pw) => `# leftover from the server migration\nDB_HOST=localhost\nroot_password=${pw}`,
+    lesson: 'Found it! Stray .bak files from a migration are free credentials for anyone who looks.',
+  },
+];
+
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+// Builds one playthrough's file system: the fixed files plus the root
+// password dropped into one randomly chosen spot. Directory markers (the
+// `foo/` keys the flat map uses) are derived from the paths so adding a
+// hiding spot in a brand-new folder can't silently produce a folder the
+// shell refuses to `cd` into.
+const buildWorld = () => {
+  const spot = pick(HIDING_SPOTS);
+  const entries = [...BASE_FILES, { path: spot.path, body: spot.body(FLAG), lesson: spot.lesson }]
+    .sort((a, b) => a.path.localeCompare(b.path));
+
+  const fileSystem = {};
+  const lessons = {};
+  for (const entry of entries) {
+    const segments = entry.path.split('/');
+    for (let i = 1; i < segments.length; i += 1) {
+      fileSystem[`${segments.slice(0, i).join('/')}/`] = null;
+    }
+    fileSystem[entry.path] = entry.body;
+    lessons[entry.path] = entry.lesson;
+  }
+  return { fileSystem, lessons, flagPath: spot.path };
+};
+
+// Pulls password-shaped assignments out of command output so every one of
+// them can get a copy button. In HARD mode that's the point: if only the
+// real password were copyable, the button would give the answer away.
+const SECRET_RE = /^\s*#?\s*([A-Za-z0-9_]*(?:password|passwd|secret|api_key|key|token)[A-Za-z0-9_]*)\s*[:=]\s*(\S+)\s*$/i;
+
+const findSecrets = (text) => {
+  if (typeof text !== 'string') return [];
+  const found = [];
+  const seen = new Set();
+  for (const line of text.split('\n')) {
+    const match = line.match(SECRET_RE);
+    if (!match) continue;
+    const [, label, value] = match;
+    if (seen.has(value)) continue;
+    seen.add(value);
+    found.push({ label, value, isRoot: value === FLAG });
+  }
+  return found;
+};
+
 const COMMANDS = ['ls', 'cat', 'cd', 'pwd', 'whoami', 'id', 'head', 'file', 'find', 'grep', 'man', 'history', 'sudo', 'clear', 'help'];
 // How many failed commands/sudo attempts before we offer the "call for
 // backup" escape hatch, so nobody gets stuck at the booth indefinitely.
 const STRUGGLE_THRESHOLD = 4;
 const isFailureOutput = (output) =>
   typeof output === 'string' && /not found|No such|missing operand|^usage:|must find the credentials|Is a directory/i.test(output);
-
-const isDir = (p) => p === '' || fileSystem[p + '/'] !== undefined;
-const isFile = (p) => fileSystem[p] !== undefined && fileSystem[p] !== null;
-
-const listChildren = (p) => {
-  if (p === '') {
-    return Object.keys(fileSystem).filter((k) => !k.includes('/') || k.endsWith('/'));
-  }
-  const prefix = p + '/';
-  return Object.keys(fileSystem)
-    .filter((k) => k.startsWith(prefix) && k !== prefix && !k.slice(prefix.length).includes('/'))
-    .map((k) => k.replace(prefix, ''));
-};
 
 const resolvePath = (base, input) => {
   if (input === '~') return '';
@@ -43,9 +133,9 @@ const resolvePath = (base, input) => {
   return parts.join('/');
 };
 
-// Nested tree view of fileSystem for the easy-mode file browser sidebar, so
-// that UI stays decoupled from the flat slash-key convention used above.
-const buildFileTree = () => {
+// Nested tree view for the easy-mode file browser sidebar and the rookie
+// block grid, so those stay decoupled from the flat slash-key convention.
+const buildFileTree = (fileSystem) => {
   const root = { type: 'dir', name: '', path: '', children: {} };
   for (const key of Object.keys(fileSystem)) {
     const isDirEntry = key.endsWith('/');
@@ -67,13 +157,17 @@ const buildFileTree = () => {
   return root;
 };
 
-export const FILE_TREE = buildFileTree();
 
 // Drives the simulated shell used in the FILESYSTEM/ESCALATE stages: command
 // parsing, tab completion, history, and the sudo password prompt. Reports
 // mission milestones back to the caller via onCredentialsFound/onRootAccess
 // so App.jsx keeps ownership of stage/progress.
 export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
+  // Regenerated on reset() so the next player gets a new hiding spot.
+  const [world, setWorld] = useState(buildWorld);
+  const { fileSystem, lessons, flagPath } = world;
+  const fileTree = useMemo(() => buildFileTree(fileSystem), [fileSystem]);
+
   const [terminalOutput, setTerminalOutput] = useState([]);
   const [command, setCommand] = useState('');
   const [cwd, setCwd] = useState('');
@@ -81,8 +175,8 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [sudoPrompt, setSudoPrompt] = useState(null); // null, or the pending sudo arg (e.g. "su")
   const [sudoAttempts, setSudoAttempts] = useState(0);
-  const [copiedFlag, setCopiedFlag] = useState(false);
-  const [hasCopiedFlag, setHasCopiedFlag] = useState(false);
+  const [copiedValue, setCopiedValue] = useState(null);
+  const [hasCopiedRoot, setHasCopiedRoot] = useState(false);
   const [foundCreds, setFoundCreds] = useState(false);
   const [errorCount, setErrorCount] = useState(0);
   const [assisted, setAssisted] = useState(false);
@@ -93,6 +187,19 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
   useEffect(() => {
     if (terminalRef.current) terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
   }, [terminalOutput]);
+
+  const isDir = (path) => path === '' || fileSystem[`${path}/`] !== undefined;
+  const isFile = (path) => fileSystem[path] !== undefined && fileSystem[path] !== null;
+
+  const listChildren = (path) => {
+    if (path === '') {
+      return Object.keys(fileSystem).filter((k) => !k.includes('/') || k.endsWith('/'));
+    }
+    const prefix = `${path}/`;
+    return Object.keys(fileSystem)
+      .filter((k) => k.startsWith(prefix) && k !== prefix && !k.slice(prefix.length).includes('/'))
+      .map((k) => k.replace(prefix, ''));
+  };
 
   const promptPath = () => (cwd ? `~/${cwd}` : '~');
 
@@ -199,7 +306,6 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
       } else {
         const content = fileSystem[target];
         output = op === 'head' ? content.split('\n').slice(0, 3).join('\n') : content;
-        if (target === 'config/credentials.txt') markCredsFound();
       }
     } else if (op === 'grep') {
       const [pattern, ...fileParts] = parts.slice(1);
@@ -212,7 +318,6 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
       } else {
         const matches = fileSystem[filePath].split('\n').filter((l) => l.toLowerCase().includes(pattern.toLowerCase()));
         output = matches.length ? matches.join('\n') : '';
-        if (filePath === 'config/credentials.txt') markCredsFound();
       }
     } else if (op === 'find') {
       const startDir = resolvePath(cwd, arg);
@@ -248,9 +353,13 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
       output = `${op}: command not found. Type 'help' for available commands.`;
     }
 
-    const hasFlag = typeof output === 'string' && output.includes(FLAG);
+    // Credentials count as found when the password actually appears on
+    // screen — `head` on a file whose password sits below line 3 shouldn't
+    // unlock sudo, and a path check can't tell the difference.
+    const secrets = findSecrets(output);
+    if (secrets.some((secret) => secret.isRoot)) markCredsFound();
     if (isFailureOutput(output)) setErrorCount((c) => c + 1);
-    setTerminalOutput((prev) => [...prev, { type: 'cmd', text: `admin@target:${promptPath()}$ ${cmd}` }, { type: 'out', text: output, flag: hasFlag }]);
+    setTerminalOutput((prev) => [...prev, { type: 'cmd', text: `admin@target:${promptPath()}$ ${cmd}` }, { type: 'out', text: output, secrets }]);
     setCmdHistory((prev) => [...prev, cmd]);
     setHistoryIndex(-1);
     setCommand('');
@@ -262,11 +371,11 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
     if (!isFile(path)) return;
     const cmdText = `cat ${path}`;
     const content = fileSystem[path];
-    const hasFlag = content.includes(FLAG);
-    setTerminalOutput((prev) => [...prev, { type: 'cmd', text: `admin@target:${promptPath()}$ ${cmdText}` }, { type: 'out', text: content, flag: hasFlag }]);
+    const secrets = findSecrets(content);
+    setTerminalOutput((prev) => [...prev, { type: 'cmd', text: `admin@target:${promptPath()}$ ${cmdText}` }, { type: 'out', text: content, secrets }]);
     setCmdHistory((prev) => [...prev, cmdText]);
     setHistoryIndex(-1);
-    if (path === 'config/credentials.txt') markCredsFound();
+    if (secrets.some((secret) => secret.isRoot)) markCredsFound();
   };
 
   // Types a masked password into the terminal one character at a time —
@@ -340,7 +449,12 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
       setTimeout(doUnlock, 900);
     } else {
       setTimeout(() => {
-        setTerminalOutput((prev) => [...prev, { type: 'cmd', text: `admin@target:${promptPath()}$ cat config/credentials.txt` }, { type: 'out', text: fileSystem['config/credentials.txt'] }]);
+        const revealed = fileSystem[flagPath];
+        setTerminalOutput((prev) => [
+          ...prev,
+          { type: 'cmd', text: `admin@target:${promptPath()}$ cat ${flagPath}` },
+          { type: 'out', text: revealed, secrets: findSecrets(revealed) },
+        ]);
         setFoundCreds(true);
         onCredentialsFound?.();
         setTimeout(doUnlock, 900);
@@ -360,8 +474,14 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
     document.body.removeChild(ta);
   };
 
+  // Copying a decoy is allowed and deliberately unhelpful: only the real
+  // root password arms the easy-mode unlock button.
   const copyToClipboard = (text) => {
-    const flash = () => { setCopiedFlag(true); setHasCopiedFlag(true); setTimeout(() => setCopiedFlag(false), 1500); };
+    const flash = () => {
+      setCopiedValue(text);
+      if (text === FLAG) setHasCopiedRoot(true);
+      setTimeout(() => setCopiedValue((current) => (current === text ? null : current)), 1500);
+    };
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(text).then(flash).catch(() => fallbackCopy(text, flash));
     } else {
@@ -419,6 +539,8 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
   };
 
   const reset = () => {
+    // New playthrough, new hiding spot.
+    setWorld(buildWorld());
     setTerminalOutput([]);
     setCommand('');
     setCwd('');
@@ -429,20 +551,23 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
     setFoundCreds(false);
     setErrorCount(0);
     setAssisted(false);
-    setCopiedFlag(false);
-    setHasCopiedFlag(false);
+    setCopiedValue(null);
+    setHasCopiedRoot(false);
   };
 
   return {
     FLAG,
+    fileTree,
+    flagPath,
+    lessonFor: (path) => lessons[path] || null,
     terminalOutput,
     command,
     setCommand,
     cwd,
     foundCreds,
     sudoPrompt,
-    copiedFlag,
-    hasCopiedFlag,
+    copiedValue,
+    hasCopiedRoot,
     assisted,
     strugglingBadly: errorCount >= STRUGGLE_THRESHOLD,
     terminalRef,

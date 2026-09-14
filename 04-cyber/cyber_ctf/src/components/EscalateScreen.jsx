@@ -4,7 +4,7 @@ import { ExfilOverlay } from './ExfilOverlay';
 import { DeployOverlay } from './DeployOverlay';
 import { useTheme } from '../theme.jsx';
 
-export function EscalateScreen({ onInject }) {
+export function EscalateScreen({ onInject, flagPath }) {
   const { theme } = useTheme();
   const [activePanel, setActivePanel] = useState(null); // null | 'logs' | 'exfil' | 'inject'
 
@@ -37,8 +37,8 @@ export function EscalateScreen({ onInject }) {
         Detection &gt; Prevention &gt; Response — that's why monitoring matters.
       </div>
 
-      {activePanel === 'logs' && <LogsOverlay onClose={() => setActivePanel(null)} />}
-      {activePanel === 'exfil' && <ExfilOverlay onClose={() => setActivePanel(null)} />}
+      {activePanel === 'logs' && <LogsOverlay onClose={() => setActivePanel(null)} flagPath={flagPath} />}
+      {activePanel === 'exfil' && <ExfilOverlay onClose={() => setActivePanel(null)} flagPath={flagPath} />}
       {activePanel === 'inject' && <DeployOverlay onComplete={onInject} />}
     </div>
   );

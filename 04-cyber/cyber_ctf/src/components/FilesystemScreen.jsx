@@ -1,5 +1,5 @@
-import { FILE_TREE } from '../hooks/useTerminal';
 import { FileBrowserSidebar } from './FileBrowserSidebar';
+import { SecretChip } from './SecretChip';
 import { BlockProgramScreen } from './BlockProgramScreen';
 import { useTheme } from '../theme.jsx';
 
@@ -7,14 +7,14 @@ export function FilesystemScreen({ terminal, mode }) {
   const { theme } = useTheme();
   if (mode === 'rookie') return <BlockProgramScreen terminal={terminal} />;
   const {
-    FLAG,
+    fileTree,
     terminalOutput,
     command,
     setCommand,
     foundCreds,
     sudoPrompt,
-    copiedFlag,
-    hasCopiedFlag,
+    copiedValue,
+    hasCopiedRoot,
     terminalRef,
     commandInputRef,
     promptPath,
@@ -27,6 +27,7 @@ export function FilesystemScreen({ terminal, mode }) {
     callForBackup,
   } = terminal;
   const easy = mode === 'easy';
+  const hard = mode === 'hard';
 
   const fillInSudo = () => {
     setCommand('sudo su');
@@ -35,7 +36,7 @@ export function FilesystemScreen({ terminal, mode }) {
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: easy ? '200px 1fr 320px' : '1fr 320px', gap: '20px' }}>
-      {easy && <FileBrowserSidebar tree={FILE_TREE} onSelectFile={viewFile} />}
+      {easy && <FileBrowserSidebar tree={fileTree} onSelectFile={viewFile} />}
 
       <div
         onClick={() => commandInputRef.current && commandInputRef.current.focus()}
@@ -54,18 +55,18 @@ export function FilesystemScreen({ terminal, mode }) {
           {terminalOutput.map((line, i) => (
             <div key={i} style={{ color: line.type === 'cmd' ? theme.accent : theme.text, marginBottom: line.type === 'out' ? '8px' : '0' }}>
               {line.text}
-              {line.flag && (
-                <div style={{ marginTop: '6px' }}>
-                  <button
-                    onClick={() => copyToClipboard(FLAG)}
-                    style={{
-                      background: 'transparent', border: `1px solid ${theme.borderStrong}`, color: copiedFlag ? theme.success : theme.accent,
-                      padding: '4px 10px', fontFamily: 'inherit', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', borderRadius: '2px',
-                      animation: (easy && !hasCopiedFlag) ? 'pulse-warn 1.3s infinite' : 'none',
-                    }}
-                  >
-                    {copiedFlag ? '✓ Copied!' : '📋 Copy Flag'}
-                  </button>
+              {line.secrets?.length > 0 && (
+                <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {line.secrets.map((secret) => (
+                    <SecretChip
+                      key={secret.value}
+                      secret={secret}
+                      badged={!hard && secret.isRoot}
+                      copied={copiedValue === secret.value}
+                      nudge={easy && secret.isRoot && !hasCopiedRoot}
+                      onCopy={() => copyToClipboard(secret.value)}
+                    />
+                  ))}
                 </div>
               )}
             </div>
@@ -119,17 +120,17 @@ export function FilesystemScreen({ terminal, mode }) {
               {easy ? (
                 <>Open the folders. One file's hiding something it shouldn't.</>
               ) : (
-                <>Try <span style={{ color: theme.accent }}>ls config/</span>. Devs sometimes leave secrets in plain text. Tab-complete file names, and use ↑/↓ to reuse past commands.</>
+                <>Run <span style={{ color: theme.accent }}>ls</span>, then look inside each folder — the password isn't in the same place twice. Plenty of files hold <em>a</em> secret; only one holds the <em>root</em> password. Tab-completes names, ↑/↓ recalls commands.</>
               )}
             </div>
           ) : (
             <div style={{ fontSize: '12px', color: theme.text2, lineHeight: '1.6' }}>
               {easy ? (
-                hasCopiedFlag ? <>Password copied. Escalate?</> : <>Copy the password above first.</>
+                hasCopiedRoot ? <>Password copied. Escalate?</> : <>Copy the 🦸 superuser password above — the other ones won't work.</>
               ) : (
-                <>Got the password? Use the <span style={{ color: theme.accent }}>📋 Copy Flag</span> button on that output, then run <span style={{ color: theme.accent }}>sudo su</span> and paste it (Ctrl/Cmd+V) when prompted.</>
+                <>Found the root password? Copy it with the chip under that output, then run <span style={{ color: theme.accent }}>sudo su</span> and paste it (Ctrl/Cmd+V) when prompted. Pick the wrong secret and sudo will just say no.</>
               )}
-              {sudoPrompt === null && (!easy || hasCopiedFlag) && (
+              {sudoPrompt === null && (!easy || hasCopiedRoot) && (
                 <button
                   onClick={(e) => { e.stopPropagation(); easy ? unlockRoot() : fillInSudo(); }}
                   style={{ display: 'block', marginTop: '10px', background: 'transparent', border: `1px solid ${theme.borderStrong}`, color: theme.accent, padding: '6px 12px', fontFamily: 'inherit', fontSize: '10px', letterSpacing: '0.1em', cursor: 'pointer', borderRadius: '2px' }}
@@ -145,7 +146,7 @@ export function FilesystemScreen({ terminal, mode }) {
           <div style={{ background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: '4px', padding: '16px' }}>
             <div style={{ fontSize: '11px', color: theme.muted, letterSpacing: '0.2em', marginBottom: '10px' }}>LESSON</div>
             <div style={{ fontSize: '11px', color: theme.text2, lineHeight: '1.6' }}>
-              Real breaches often start with secrets accidentally committed to code. Tools like git-secrets and pre-commit hooks catch these before they ship.
+              Real breaches often start with secrets accidentally committed to code. Tools like git-secrets and pre-commit hooks catch these before they ship — and note how many different secrets were lying around in there.
             </div>
           </div>
         )}
