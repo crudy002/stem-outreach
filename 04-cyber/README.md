@@ -43,7 +43,7 @@ and let FastAPI serve it:
 # on your laptop (or any machine with Node)
 cd cyber_ctf
 npm install          # one-time, needs internet — see "Offline operation" below
-npm run build        # outputs to dist/ (~830KB, ~59KB gzipped JS)
+npm run build        # outputs to dist/ (~850KB, ~64KB gzipped JS)
 
 # copy dist/ and leaderboard-api/ to the Pi, e.g.:
 # (rsync only creates the last path component, not the whole parent chain,
@@ -101,7 +101,7 @@ works, but it re-copies every file whether it changed or not, which adds
 up if you're iterating at the booth (tweak a challenge hint, rebuild,
 redeploy, repeat). `rsync` does the same job but only transfers what
 changed, so a redeploy after a one-line fix is near-instant instead of
-pushing all ~830KB again.
+pushing all ~850KB again.
 
 What actually needs to reach the Pi:
 
@@ -145,7 +145,7 @@ Once built, this needs **no internet connection** to run. Confirmed by
 checking the actual source, not assuming:
 
 - No CDN scripts, no Google Fonts, no third-party assets — the entire
-  frontend is React/ReactDOM bundled into one ~58KB gzipped JS file, plus
+  frontend is React/ReactDOM bundled into one ~64KB gzipped JS file, plus
   one local PNG logo. Fonts used are all system fonts (monospace stack,
   Comic Sans/cursive for the sticky note).
 - The only network call the game makes is to the leaderboard API, and that
@@ -281,6 +281,8 @@ every additional station — everything above is already baked in.
   ```bash
   ssh dietpi@<pi-ip> "curl -X DELETE http://127.0.0.1:8000/scores"
   ```
+  Add `?mode=rookie` (or `easy`/`hard`) to wipe just one difficulty's board
+  instead of all three — each difficulty is ranked separately.
 - **Decide on hostnames.** Every clone boots with the same hostname
   unless you change it. `AUTO_SETUP_NET_HOSTNAME` in `/boot/dietpi.txt` is
   editable straight from a card reader before first boot (`/boot` is a

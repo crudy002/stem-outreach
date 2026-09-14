@@ -1,10 +1,22 @@
+DONE
+- [x] Per-mode leaderboards — rookie/easy/hard each rank separately, so a
+      block-tapping rookie no longer outranks everyone who typed the
+      commands. (scores.mode column + ?mode= filter; old rows migrate in
+      place and rank among themselves.)
+- [x] Exfil / payload-deploy animations (ExfilOverlay, DeployOverlay,
+      LogsOverlay on the elevated-terminal screen).
+
+NEXT
 - Add some "FAIL" conditions where the user gets "Caught" by intrusion detection system
     - add to many login attempts failure mode
     - add a dont look at this file/touch this file failure mode
+  (This is the thing that turns it from a guided tour into a game, and it
+  teaches the defender's half — right now defense only appears as footer text.)
 
-
-- Add some more graphics/animations for things like exfil/download data
-
+- Rookie mode's access-code gate is a memory test, not a security lesson.
+  Every other beat teaches something. Either hide the code inside one of the
+  files so it rewards reading, or frame it out loud as what two-factor
+  authentication feels like.
 
 - Leaderboard API hardening/roadmap (see leaderboard-api/main.py, App.jsx)
     - protect DELETE /scores with a shared secret before running on any WiFi
@@ -14,6 +26,8 @@
       just need one machine as the shared API host on the booth LAN)
     - tag runs with an event/session id instead of hard-wiping via
       DELETE /scores, so history persists across multiple outreach events
+      (DELETE /scores?mode=X now exists for partial wipes, but it's still
+      a wipe, not history)
     - add a spectator/big-screen leaderboard view (read-only page polling
       GET /scores) for booth ambiance
     - add a GET /stats endpoint (plays, completion rate, avg/fastest time)

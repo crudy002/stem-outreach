@@ -14,8 +14,12 @@ Run it:
     uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 Then:
-    http://localhost:8000/docs   — interactive API docs
-    http://localhost:8000/scores — top times (JSON)
+    http://localhost:8000/docs             — interactive API docs
+    http://localhost:8000/scores           — top times (JSON)
+    http://localhost:8000/scores?mode=hard — top times for one difficulty
+
+Runs are ranked within their difficulty mode, never across modes — see
+list_scores() for why.
 
 If ../cyber_ctf/dist exists (built with `npm run build`), this also serves
 the built React app at http://localhost:8000/ — one process, one port, no
@@ -30,15 +34,20 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse
 
 DB_PATH = Path(__file__).parent / "leaderboard.db"
 STATIC_DIR = Path(os.environ.get("STATIC_DIR", Path(__file__).parent.parent / "cyber_ctf" / "dist"))
+
+# Difficulty modes the game reports. Ranking is scoped to one of these:
+# a ROOKIE run (tap coloured blocks) is inherently faster than a HARD run
+# (type every command), so a single mixed board would just rank by mode.
+MODES = ("rookie", "easy", "hard")
 
 app = FastAPI(title="Cyber CTF Leaderboard", docs_url=None)
 
@@ -73,10 +82,18 @@ def init_db():
                 player_name TEXT NOT NULL,
                 elapsed_seconds REAL NOT NULL,
                 station_id TEXT,
+                mode TEXT,
                 completed_at TEXT NOT NULL
             )
             """
         )
+        # `mode` was added after the first booth build. Databases created
+        # before that need the column bolted on; their existing rows keep
+        # mode=NULL and rank among themselves as "unspecified" rather than
+        # polluting a real mode's board.
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(scores)")}
+        if "mode" not in columns:
+            conn.execute("ALTER TABLE scores ADD COLUMN mode TEXT")
 
 
 init_db()
@@ -86,6 +103,17 @@ class ScoreIn(BaseModel):
     player_name: str = Field(min_length=1, max_length=40)
     elapsed_seconds: float = Field(gt=0)
     station_id: str | None = Field(default=None, max_length=40)
+    mode: str | None = Field(default=None, description=f"one of {MODES}")
+
+    @field_validator("mode")
+    @classmethod
+    def known_mode(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = v.lower()
+        if v not in MODES:
+            raise ValueError(f"mode must be one of {MODES}")
+        return v
 
 
 class ScoreOut(BaseModel):
@@ -93,6 +121,7 @@ class ScoreOut(BaseModel):
     player_name: str
     elapsed_seconds: float
     station_id: str | None
+    mode: str | None
     completed_at: str
     rank: int
 
@@ -139,14 +168,24 @@ def submit_score(score: ScoreIn):
     completed_at = datetime.now(timezone.utc).isoformat()
     with get_db() as conn:
         cur = conn.execute(
-            "INSERT INTO scores (player_name, elapsed_seconds, station_id, completed_at) "
-            "VALUES (?, ?, ?, ?)",
-            (score.player_name.strip(), score.elapsed_seconds, score.station_id, completed_at),
+            "INSERT INTO scores (player_name, elapsed_seconds, station_id, mode, completed_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (
+                score.player_name.strip(),
+                score.elapsed_seconds,
+                score.station_id,
+                score.mode,
+                completed_at,
+            ),
         )
         new_id = cur.lastrowid
+        # Rank within the same difficulty only. `IS` rather than `=` so that
+        # legacy mode=NULL rows compare against each other instead of
+        # matching nothing.
         rank = conn.execute(
-            "SELECT COUNT(*) + 1 AS rank FROM scores WHERE elapsed_seconds < ?",
-            (score.elapsed_seconds,),
+            "SELECT COUNT(*) + 1 AS rank FROM scores "
+            "WHERE elapsed_seconds < ? AND mode IS ?",
+            (score.elapsed_seconds, score.mode),
         ).fetchone()["rank"]
 
     return ScoreOut(
@@ -154,20 +193,47 @@ def submit_score(score: ScoreIn):
         player_name=score.player_name.strip(),
         elapsed_seconds=score.elapsed_seconds,
         station_id=score.station_id,
+        mode=score.mode,
         completed_at=completed_at,
         rank=rank,
     )
 
 
 @app.get("/scores", response_model=list[ScoreOut])
-def list_scores(limit: int = 10):
+def list_scores(
+    limit: int = 10,
+    mode: str | None = Query(default=None, description=f"filter to one of {MODES}"),
+):
+    """Fastest times first.
+
+    `rank` is always a rank *within that row's mode*, so a board filtered to
+    one difficulty reads 1, 2, 3 as expected, and an unfiltered board still
+    reports each run's standing against its own difficulty rather than
+    against a rookie's block-tapping time.
+    """
     if limit < 1 or limit > 100:
         raise HTTPException(400, "limit must be between 1 and 100")
+    if mode is not None:
+        mode = mode.lower()
+        if mode not in MODES:
+            raise HTTPException(400, f"mode must be one of {MODES}")
 
+    # RANK() is computed over the whole table before LIMIT, so ranks stay
+    # correct instead of being renumbered within the returned page.
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT * FROM scores ORDER BY elapsed_seconds ASC LIMIT ?",
-            (limit,),
+            """
+            SELECT * FROM (
+                SELECT *, RANK() OVER (
+                    PARTITION BY mode ORDER BY elapsed_seconds ASC
+                ) AS rank
+                FROM scores
+            )
+            WHERE :mode IS NULL OR mode = :mode
+            ORDER BY elapsed_seconds ASC
+            LIMIT :limit
+            """,
+            {"mode": mode, "limit": limit},
         ).fetchall()
 
     return [
@@ -176,18 +242,34 @@ def list_scores(limit: int = 10):
             player_name=row["player_name"],
             elapsed_seconds=row["elapsed_seconds"],
             station_id=row["station_id"],
+            mode=row["mode"],
             completed_at=row["completed_at"],
-            rank=i + 1,
+            rank=row["rank"],
         )
-        for i, row in enumerate(rows)
+        for row in rows
     ]
 
 
 @app.delete("/scores", status_code=204)
-def reset_scores():
-    """Wipe the board — for clearing test runs between booth sessions."""
+def reset_scores(
+    mode: str | None = Query(default=None, description=f"wipe only one of {MODES}"),
+):
+    """Wipe the board — for clearing test runs between booth sessions.
+
+    With no `mode`, every run is deleted. With one, only that difficulty's
+    board is cleared, so a botched rookie session doesn't cost you the day's
+    hard-mode times.
+    """
+    if mode is not None:
+        mode = mode.lower()
+        if mode not in MODES:
+            raise HTTPException(400, f"mode must be one of {MODES}")
+
     with get_db() as conn:
-        conn.execute("DELETE FROM scores")
+        if mode is None:
+            conn.execute("DELETE FROM scores")
+        else:
+            conn.execute("DELETE FROM scores WHERE mode = ?", (mode,))
 
 
 # Mounted last so it never shadows the API routes above — Starlette matches

@@ -9,6 +9,7 @@ import { HackedScreen } from './components/HackedScreen';
 import { IntroOverlay } from './components/IntroOverlay';
 import { LeaderboardModal } from './components/LeaderboardModal';
 import { ElapsedTimer } from './components/ElapsedTimer';
+import { modeLabel } from './modes';
 
 // The leaderboard API runs standalone (see ../leaderboard-api) and defaults
 // to localhost:8000. Override with VITE_LEADERBOARD_API_URL when the API is
@@ -28,7 +29,11 @@ const randomCreds = () => ({
 export default function App() {
   const { theme, themeId, setThemeId } = useTheme();
   const [stage, setStage] = useState('start'); // start, login, filesystem, escalate, hacked, victory
-  const [mode, setMode] = useState('easy'); // rookie: tap-to-queue command blocks, run as a program. easy: click-to-explore + one-click root. hard: type every command.
+  const [mode, setMode] = useState('easy'); // rookie: tap coloured blocks. easy: click-to-explore + one-click root. hard: type every command.
+  // Which mode's leaderboard is on screen. Follows the difficulty picker on
+  // the start screen, but the modal can browse other modes' boards without
+  // changing what the next player is about to play.
+  const [boardMode, setBoardMode] = useState('easy');
   const [playerName, setPlayerName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -61,8 +66,14 @@ export default function App() {
     if (stage === 'filesystem' && commandInputRef.current) commandInputRef.current.focus();
   }, [stage]);
 
-  const fetchLeaderboard = () => {
-    fetch(`${API_BASE}/scores?limit=10`)
+  // Boards are always per-mode: a rookie tapping blocks would otherwise
+  // outrank every hard-mode player who typed the commands by hand.
+  // `m` is guarded rather than defaulted: this is wired straight to onClick
+  // in a couple of places, and React would hand a click event in as the
+  // first argument.
+  const fetchLeaderboard = (m) => {
+    const target = typeof m === 'string' ? m : boardMode;
+    fetch(`${API_BASE}/scores?limit=10&mode=${encodeURIComponent(target)}`)
       .then((res) => {
         if (!res.ok) throw new Error('bad response');
         return res.json();
@@ -79,9 +90,17 @@ export default function App() {
     fetchLeaderboard();
   };
 
+  // Also covers the initial load, since boardMode has a value on mount.
   useEffect(() => {
-    fetchLeaderboard();
-  }, []);
+    fetchLeaderboard(boardMode);
+  }, [boardMode]);
+
+  // Picking a difficulty also swings the start screen's board to that mode,
+  // so a player sees the times they'll actually be measured against.
+  const selectMode = (m) => {
+    setMode(m);
+    setBoardMode(m);
+  };
 
   const submitScore = (elapsed) => {
     setSubmitStatus('submitting');
@@ -92,6 +111,7 @@ export default function App() {
         player_name: playerName || 'Anonymous',
         elapsed_seconds: elapsed,
         station_id: STATION_ID,
+        mode,
       }),
     })
       .then((res) => {
@@ -101,7 +121,10 @@ export default function App() {
       .then((data) => {
         setRank(data.rank);
         setSubmitStatus('done');
-        fetchLeaderboard();
+        // Show the board for the mode just played, not whatever the modal
+        // was last left browsing.
+        setBoardMode(mode);
+        fetchLeaderboard(mode);
       })
       .catch(() => setSubmitStatus('error'));
   };
@@ -144,6 +167,7 @@ export default function App() {
 
   const reset = () => {
     setStage('start');
+    setBoardMode(mode);
     setPlayerName('');
     setUsername('');
     setPassword('');
@@ -233,6 +257,8 @@ export default function App() {
           scores={leaderboard}
           error={leaderboardError}
           onRefresh={fetchLeaderboard}
+          boardMode={boardMode}
+          onSelectMode={setBoardMode}
           onClose={() => setShowLeaderboard(false)}
         />
       )}
@@ -265,12 +291,13 @@ export default function App() {
           playerName={playerName}
           setPlayerName={setPlayerName}
           mode={mode}
-          setMode={setMode}
+          setMode={selectMode}
           onBegin={beginMission}
           startButtonRef={startButtonRef}
           leaderboard={leaderboard}
           leaderboardError={leaderboardError}
           onRefreshLeaderboard={fetchLeaderboard}
+          boardMode={boardMode}
         />
       )}
 
@@ -302,6 +329,7 @@ export default function App() {
           submitStatus={submitStatus}
           assisted={assisted}
           rank={rank}
+          modeName={modeLabel(mode)}
           onViewLeaderboard={openLeaderboard}
           onReset={reset}
         />

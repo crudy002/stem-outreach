@@ -1,6 +1,10 @@
 import { useTheme } from '../theme.jsx';
+import { MODES, modeLabel } from '../modes';
 
-export function LeaderboardModal({ scores, error, onRefresh, onClose }) {
+// One board per difficulty. Tabs browse other modes' times without changing
+// the difficulty the next player is set to play — that stays with the start
+// screen's picker.
+export function LeaderboardModal({ scores, error, onRefresh, boardMode, onSelectMode, onClose }) {
   const { theme } = useTheme();
   return (
     <div
@@ -14,9 +18,27 @@ export function LeaderboardModal({ scores, error, onRefresh, onClose }) {
         onClick={(e) => e.stopPropagation()}
         style={{ background: theme.panel, border: `1px solid ${theme.borderStrong}`, borderRadius: '4px', padding: '28px', width: '420px', maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto' }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div style={{ fontSize: '14px', color: theme.accent, letterSpacing: '0.15em' }}>🏆 FASTEST TIMES</div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: theme.muted, fontSize: '16px', cursor: 'pointer' }}>✕</button>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${MODES.length}, 1fr)`, gap: '6px', marginBottom: '16px' }}>
+          {MODES.map((m) => (
+            <button
+              key={m.id}
+              onClick={() => onSelectMode(m.id)}
+              style={{
+                background: boardMode === m.id ? theme.panel2 : 'transparent',
+                border: `1px solid ${boardMode === m.id ? theme.accent : theme.borderStrong}`,
+                color: boardMode === m.id ? theme.accent : theme.muted,
+                padding: '7px 4px', fontFamily: 'inherit', fontSize: '10px',
+                letterSpacing: '0.15em', cursor: 'pointer', borderRadius: '2px',
+              }}
+            >
+              {m.label}
+            </button>
+          ))}
         </div>
 
         {error && (
@@ -26,7 +48,9 @@ export function LeaderboardModal({ scores, error, onRefresh, onClose }) {
         )}
 
         {!error && scores.length === 0 && (
-          <div style={{ fontSize: '12px', color: theme.text2 }}>No runs recorded yet — be the first!</div>
+          <div style={{ fontSize: '12px', color: theme.text2 }}>
+            No {modeLabel(boardMode)} runs recorded yet — be the first!
+          </div>
         )}
 
         {!error && scores.length > 0 && (
@@ -41,7 +65,7 @@ export function LeaderboardModal({ scores, error, onRefresh, onClose }) {
         )}
 
         <button
-          onClick={onRefresh}
+          onClick={() => onRefresh()}
           style={{ marginTop: '18px', width: '100%', background: 'transparent', border: `1px solid ${theme.borderStrong}`, color: theme.muted, padding: '10px', fontFamily: 'inherit', fontSize: '11px', letterSpacing: '0.15em', cursor: 'pointer', borderRadius: '2px' }}
         >
           ↻ REFRESH

@@ -6,12 +6,19 @@ I want to do this" moment, backed by code that actually teaches something.
 
 ## Status
 
-| Module          | What it does                                  | State        |
-|-----------------|-----------------------------------------------|--------------|
-| `01-hello-gpio` | Button presses, blinking LEDs — tangible I/O  | Not started  |
-| `02-sensors`    | Reads sensors, shows live data                | Not started  |
-| `03-network`    | Sends "packets" between Pis (viz centerpiece) | In progress  |
-| `shared`        | Reusable helpers                              | —            |
+| Module          | What it does                                   | State           | Hardware needed   |
+|-----------------|------------------------------------------------|-----------------|-------------------|
+| `01-hello-gpio` | Button presses, blinking LEDs, sound — real I/O | Written, untested on hardware | Breadboard, LED, button |
+| `02-sensors`    | Reads sensors, shows live data                 | Not started     | Sensors           |
+| `03-network`    | Sends "packets" between Pis + live dashboard   | Works on localhost | None           |
+| `04-cyber`      | Cyber range CTF: a booth-ready hacking game with a leaderboard | **Furthest along — deployable** | None (a screen) |
+| `05-radio`      | Live RF spectrum in the terminal, FM audio     | Working, uncommitted edits | RTL-SDR dongle |
+| `dashboard`     | React booth display for `03-network`           | In progress     | None              |
+| `shared`        | Reusable helpers                               | —               | —                 |
+
+`04-cyber` is the one module with a full deployment story — build script,
+Pi provisioning, systemd, kiosk mode. If you only stand up one station,
+stand up that one. It has [its own README](04-cyber/README.md).
 
 ## Project layout
 
@@ -24,6 +31,13 @@ stem-outreach/
 │   ├── sender.py
 │   ├── receiver.py
 │   └── coordinator.py  # HTTP server the dashboard polls
+├── 04-cyber/           # the CTF booth station — NO hardware needed
+│   ├── cyber_ctf/      # the React game
+│   ├── leaderboard-api/ # FastAPI + SQLite run times
+│   ├── setup-pi.sh     # provision a fresh DietPi
+│   └── deploy-to-pi.sh # build + rsync + restart
+├── 05-radio/           # RTL-SDR spectrum viewer (needs a dongle)
+├── dashboard/          # React booth display for 03-network
 ├── shared/             # shared helper code
 └── venv/               # python virtual environment (not committed)
 ```
@@ -107,6 +121,8 @@ real traffic.
 
 ## Roadmap
 
+Network station:
+
 - [x] Folder structure + venv
 - [x] Network sender / receiver working over localhost
 - [x] Coordinator server + React dashboard (live topology view)
@@ -114,3 +130,11 @@ real traffic.
 - [ ] GPIO: received packet lights an LED
 - [ ] Multi-hop chain (packet routed through 3-4 Pis)
 - [ ] Booth display polished for event use
+
+Cyber station (see [04-cyber/TODO.txt](04-cyber/TODO.txt) for detail):
+
+- [x] CTF game: login → filesystem → escalation → payload
+- [x] Three difficulty modes, each with its own leaderboard
+- [x] One-process deployment, Pi provisioning, kiosk mode
+- [ ] Fail states — getting caught by intrusion detection
+- [ ] Lock down `DELETE /scores` before running on public WiFi

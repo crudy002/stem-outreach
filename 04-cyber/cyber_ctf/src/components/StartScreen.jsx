@@ -1,8 +1,9 @@
 import { useTheme } from '../theme.jsx';
+import { MODES, modeLabel } from '../modes';
 
 export function StartScreen({
   playerName, setPlayerName, mode, setMode, onBegin, startButtonRef,
-  leaderboard = [], leaderboardError = false, onRefreshLeaderboard,
+  leaderboard = [], leaderboardError = false, onRefreshLeaderboard, boardMode,
 }) {
   const { theme } = useTheme();
   return (
@@ -54,10 +55,13 @@ export function StartScreen({
 
           <div style={{ marginBottom: '24px' }}>
             <div style={{ fontSize: '10px', color: theme.muted, letterSpacing: '0.2em', marginBottom: '6px' }}>DIFFICULTY</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
-              <ModeButton label="ROOKIE" sub="Drag & drop blocks" active={mode === 'rookie'} onClick={() => setMode('rookie')} />
-              <ModeButton label="EASY" sub="Guided, click-to-explore" active={mode === 'easy'} onClick={() => setMode('easy')} />
-              <ModeButton label="HARD" sub="Type every command" active={mode === 'hard'} onClick={() => setMode('hard')} />
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${MODES.length}, 1fr)`, gap: '10px' }}>
+              {MODES.map((m) => (
+                <ModeButton key={m.id} label={m.label} sub={m.sub} active={mode === m.id} onClick={() => setMode(m.id)} />
+              ))}
+            </div>
+            <div style={{ fontSize: '10px', color: theme.dim, marginTop: '8px', lineHeight: '1.5' }}>
+              Each difficulty has its own leaderboard — you're only racing people who played the same way.
             </div>
           </div>
 
@@ -85,20 +89,23 @@ export function StartScreen({
           </button>
         </div>
 
-        <LeaderboardPanel scores={leaderboard} error={leaderboardError} onRefresh={onRefreshLeaderboard} />
+        <LeaderboardPanel scores={leaderboard} error={leaderboardError} onRefresh={onRefreshLeaderboard} boardMode={boardMode} />
       </div>
     </div>
   );
 }
 
-function LeaderboardPanel({ scores, error, onRefresh }) {
+function LeaderboardPanel({ scores, error, onRefresh, boardMode }) {
   const { theme } = useTheme();
   return (
     <div style={{ background: theme.panel, border: `1px solid ${theme.border}`, borderRadius: '4px', padding: '36px', display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', paddingBottom: '18px', borderBottom: `1px solid ${theme.panel2}` }}>
-        <div style={{ fontSize: '14px', color: theme.accent, letterSpacing: '0.1em' }}>🏆 TOP OPERATIVES</div>
+        <div>
+          <div style={{ fontSize: '14px', color: theme.accent, letterSpacing: '0.1em' }}>🏆 TOP OPERATIVES</div>
+          <div style={{ fontSize: '10px', color: theme.muted, letterSpacing: '0.2em', marginTop: '4px' }}>{modeLabel(boardMode)} BOARD</div>
+        </div>
         <button
-          onClick={onRefresh}
+          onClick={() => onRefresh()}
           title="Refresh leaderboard"
           style={{ background: 'transparent', border: 'none', color: theme.muted, fontSize: '14px', cursor: 'pointer', lineHeight: 1, padding: '4px' }}
         >
@@ -114,7 +121,7 @@ function LeaderboardPanel({ scores, error, onRefresh }) {
 
       {!error && scores.length === 0 && (
         <div style={{ fontSize: '12px', color: theme.text2, lineHeight: '1.6' }}>
-          No runs recorded yet — be the first!
+          No {modeLabel(boardMode)} runs recorded yet — be the first!
         </div>
       )}
 

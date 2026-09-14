@@ -1,6 +1,6 @@
 import { useTheme } from '../theme.jsx';
 
-export function HackedScreen({ elapsedSeconds, submitStatus, assisted, rank, onViewLeaderboard, onReset }) {
+export function HackedScreen({ elapsedSeconds, submitStatus, assisted, rank, modeName, onViewLeaderboard, onReset }) {
   const { theme } = useTheme();
   return (
     <div style={{
@@ -51,7 +51,7 @@ export function HackedScreen({ elapsedSeconds, submitStatus, assisted, rank, onV
           <div style={{ fontSize: '11px', color: theme.text2, marginTop: '6px' }}>
             {assisted && '📡 Backup-assisted run — not eligible for the leaderboard.'}
             {!assisted && submitStatus === 'submitting' && 'Submitting to leaderboard…'}
-            {!assisted && submitStatus === 'done' && rank && `Ranked #${rank} on the leaderboard`}
+            {!assisted && submitStatus === 'done' && rank && `Ranked #${rank} on the ${modeName} leaderboard`}
             {!assisted && submitStatus === 'error' && 'Could not reach the leaderboard server — score not recorded.'}
           </div>
           <button
