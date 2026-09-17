@@ -296,6 +296,12 @@ def main():
         shared["run"] = False
         if shared["proc"]:
             shared["proc"].terminate()
+            try:
+                shared["proc"].wait(timeout=1.0)
+            except subprocess.TimeoutExpired:
+                # rtl_sdr's own SIGTERM handling can deadlock on this hardware -
+                # don't let a wedged child keep the USB dongle claimed forever.
+                shared["proc"].kill()
         try:
             aplay.stdin.close()
         except Exception:

@@ -277,6 +277,12 @@ def main():
         shared["run"] = False
         if shared["proc"]:
             shared["proc"].terminate()
+            try:
+                shared["proc"].wait(timeout=1.0)
+            except subprocess.TimeoutExpired:
+                # rtl_sdr's own SIGTERM handling can deadlock on this hardware -
+                # don't let a wedged child keep the USB dongle claimed forever.
+                shared["proc"].kill()
         if is_tty and old_term is not None:
             termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_term)
         sys.stdout.write(SHOW_CUR + RESET + "\n")
