@@ -42,3 +42,41 @@ export function SecretChip({ secret, badged, copied, nudge, onCopy }) {
     </button>
   );
 }
+
+// Explains why each decoy doesn't matter instead of just labelling it, so
+// the message teaches something even though there's nothing to copy.
+const DECOY_DESCRIPTIONS = [
+  [/wifi/i, 'a wifi password — gets you online, not root'],
+  [/db|database/i, 'a database password — opens the database, not sudo'],
+  [/api[_-]?key/i, 'an API key — for calling a service, not becoming root'],
+  [/old.*root/i, 'an old root password — rotated out, no longer works'],
+];
+
+const describeDecoy = (label) =>
+  (DECOY_DESCRIPTIONS.find(([pattern]) => pattern.test(label)) || [null, 'a password — not the one that unlocks root'])[1];
+
+// EASY mode's non-copyable stand-in for a decoy chip: naming what it found
+// without handing over a value to copy, so clicking through every file
+// stops being a viable shortcut to the root password.
+export function DecoyReveal({ secret }) {
+  const { theme } = useTheme();
+  return (
+    <div
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '7px',
+        border: `1px dashed ${theme.borderStrong}`,
+        color: theme.dim,
+        padding: '5px 11px',
+        fontFamily: 'inherit',
+        fontSize: '10px',
+        letterSpacing: '0.05em',
+        borderRadius: '2px',
+      }}
+    >
+      <span aria-hidden="true">🔍</span>
+      <span>Found {describeDecoy(secret.label)}.</span>
+    </div>
+  );
+}

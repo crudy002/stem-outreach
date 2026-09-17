@@ -166,9 +166,12 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
   const [foundCreds, setFoundCreds] = useState(false);
   const [errorCount, setErrorCount] = useState(0);
   const [assisted, setAssisted] = useState(false);
+  // True while the RootAccessModal's password/grant animation is playing.
+  // Real stage transition (onRootAccess) waits for it to finish rather
+  // than firing the instant the button is clicked.
+  const [escalating, setEscalating] = useState(false);
   const terminalRef = useRef(null);
   const commandInputRef = useRef(null);
-  const passwordLineIndexRef = useRef(0);
 
   useEffect(() => {
     if (terminalRef.current) terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
@@ -352,9 +355,11 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
   };
 
   // Easy-mode file browser: clicking a file "cats" it without requiring the
-  // player to type the command themselves.
+  // player to type the command themselves. Returns the content/secrets so
+  // the caller can also show them in a popup, rather than only in the
+  // scrolling terminal transcript.
   const viewFile = (path) => {
-    if (!isFile(path)) return;
+    if (!isFile(path)) return null;
     const cmdText = `cat ${path}`;
     const content = fileSystem[path];
     const secrets = findSecrets(content);
@@ -362,51 +367,27 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
     setCmdHistory((prev) => [...prev, cmdText]);
     setHistoryIndex(-1);
     if (secrets.some((secret) => secret.isRoot)) markCredsFound();
+    return { content, secrets };
   };
 
-  // Types a masked password into the terminal one character at a time —
-  // used by both the manual unlock button and the assisted "call for
-  // backup" flow, so the copied credential visibly lands in the prompt
-  // instead of just appearing pre-filled.
-  const typeMaskedPassword = (onDone, dots = 10) => {
-    const prefix = '[sudo] password for admin: ';
-    setTerminalOutput((prev) => {
-      passwordLineIndexRef.current = prev.length;
-      return [...prev, { type: 'out', text: prefix }];
-    });
-    let typed = 0;
-    const interval = setInterval(() => {
-      typed += 1;
-      setTerminalOutput((prev) => {
-        const idx = passwordLineIndexRef.current;
-        if (!prev[idx]) return prev;
-        const next = [...prev];
-        next[idx] = { ...next[idx], text: prefix + '•'.repeat(typed) };
-        return next;
-      });
-      if (typed >= dots) {
-        clearInterval(interval);
-        onDone();
-      }
-    }, 110);
-  };
-
-  // Easy-mode one-click root: skips manually typing "sudo su", but still
-  // types the copied password into the prompt so the copy step a moment
-  // ago visibly pays off instead of being pointless.
+  // Easy-mode one-click root: skips manually typing "sudo su", then hands
+  // off to the cinematic RootAccessModal for the password-entry/access-
+  // granted sequence — see `escalating`/`completeEscalation` below.
   const unlockRoot = () => {
     if (!foundCreds || sudoPrompt !== null) return;
     setTerminalOutput((prev) => [...prev, { type: 'cmd', text: `admin@target:${promptPath()}$ sudo su` }]);
     setCmdHistory((prev) => [...prev, 'sudo su']);
     setHistoryIndex(-1);
-    setTimeout(() => {
-      typeMaskedPassword(() => {
-        setTimeout(() => {
-          setTerminalOutput((prev) => [...prev, { type: 'out', text: '[+] Authentication successful. Elevating to root...' }]);
-          setTimeout(() => onRootAccess?.(), 800);
-        }, 400);
-      });
-    }, 450);
+    setTimeout(() => setEscalating(true), 450);
+  };
+
+  // Called by RootAccessModal once its animation finishes playing. This is
+  // what actually advances the mission, so the stage change lands on the
+  // beat of "ACCESS GRANTED" rather than the instant the button was clicked.
+  const completeEscalation = () => {
+    setEscalating(false);
+    setTerminalOutput((prev) => [...prev, { type: 'out', text: '[+] Authentication successful. Elevating to root...' }]);
+    onRootAccess?.();
   };
 
   // Escape hatch for players who are out of their depth: after enough failed
@@ -421,14 +402,7 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
 
     const doUnlock = () => {
       setTerminalOutput((prev) => [...prev, { type: 'cmd', text: `admin@target:${promptPath()}$ sudo su` }]);
-      setTimeout(() => {
-        typeMaskedPassword(() => {
-          setTimeout(() => {
-            setTerminalOutput((prev) => [...prev, { type: 'out', text: '[+] Authentication successful. Elevating to root...' }]);
-            setTimeout(() => onRootAccess?.(), 800);
-          }, 400);
-        });
-      }, 400);
+      setTimeout(() => setEscalating(true), 400);
     };
 
     if (hadCreds) {
@@ -481,10 +455,12 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
     if (attempt === FLAG) {
       const rootShells = ['su', '-i', '-s', 'bash', 'sh'];
       if (rootShells.includes(sudoPrompt)) {
-        setTerminalOutput((prev) => [...prev, { type: 'out', text: '[+] Authentication successful. Elevating to root.' }]);
+        // Same RootAccessModal payoff as the easy-mode unlock/backup flows
+        // (see completeEscalation) — HARD players typed the password
+        // themselves, so this is their reward beat too.
         setSudoPrompt(null);
         setSudoAttempts(0);
-        setTimeout(() => onRootAccess?.(), 800);
+        setEscalating(true);
       } else {
         setTerminalOutput((prev) => [...prev, { type: 'out', text: `sudo: ${sudoPrompt}: command not found` }]);
         setSudoPrompt(null);
@@ -537,6 +513,7 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
     setFoundCreds(false);
     setErrorCount(0);
     setAssisted(false);
+    setEscalating(false);
     setCopiedValue(null);
     setHasCopiedRoot(false);
   };
@@ -554,6 +531,8 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
     copiedValue,
     hasCopiedRoot,
     assisted,
+    escalating,
+    completeEscalation,
     strugglingBadly: errorCount >= STRUGGLE_THRESHOLD,
     terminalRef,
     commandInputRef,

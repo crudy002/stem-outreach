@@ -1,9 +1,13 @@
+import { useState } from 'react';
 import { FileBrowserSidebar } from './FileBrowserSidebar';
-import { SecretChip } from './SecretChip';
+import { FileViewModal } from './FileViewModal';
+import { RootAccessModal } from './RootAccessModal';
+import { SecretChip, DecoyReveal } from './SecretChip';
 import { useTheme } from '../theme.jsx';
 
 export function FilesystemScreen({ terminal, mode }) {
   const { theme } = useTheme();
+  const [activeFile, setActiveFile] = useState(null); // { path, content, secrets } | null
   const {
     fileTree,
     terminalOutput,
@@ -21,6 +25,8 @@ export function FilesystemScreen({ terminal, mode }) {
     viewFile,
     unlockRoot,
     assisted,
+    escalating,
+    completeEscalation,
     strugglingBadly,
     callForBackup,
   } = terminal;
@@ -32,9 +38,31 @@ export function FilesystemScreen({ terminal, mode }) {
     commandInputRef.current?.focus();
   };
 
+  // EASY mode's file click opens a popup instead of just letting the
+  // contents land in the terminal transcript, so browsing every file in a
+  // couple of seconds isn't a viable shortcut.
+  const openFile = (path) => {
+    const result = viewFile(path);
+    if (result) setActiveFile({ path, ...result });
+  };
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: easy ? '200px 1fr 320px' : '1fr 320px', gap: '20px' }}>
-      {easy && <FileBrowserSidebar tree={fileTree} onSelectFile={viewFile} />}
+      {easy && <FileBrowserSidebar tree={fileTree} onSelectFile={openFile} />}
+
+      {activeFile && (
+        <FileViewModal
+          path={activeFile.path}
+          content={activeFile.content}
+          secrets={activeFile.secrets}
+          copiedValue={copiedValue}
+          hasCopiedRoot={hasCopiedRoot}
+          onCopy={copyToClipboard}
+          onClose={() => setActiveFile(null)}
+        />
+      )}
+
+      <RootAccessModal open={escalating} onDone={completeEscalation} />
 
       <div
         onClick={() => commandInputRef.current && commandInputRef.current.focus()}
@@ -55,16 +83,20 @@ export function FilesystemScreen({ terminal, mode }) {
               {line.text}
               {line.secrets?.length > 0 && (
                 <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                  {line.secrets.map((secret) => (
-                    <SecretChip
-                      key={secret.value}
-                      secret={secret}
-                      badged={!hard && secret.isRoot}
-                      copied={copiedValue === secret.value}
-                      nudge={easy && secret.isRoot && !hasCopiedRoot}
-                      onCopy={() => copyToClipboard(secret.value)}
-                    />
-                  ))}
+                  {line.secrets.map((secret) =>
+                    easy && !secret.isRoot ? (
+                      <DecoyReveal key={secret.value} secret={secret} />
+                    ) : (
+                      <SecretChip
+                        key={secret.value}
+                        secret={secret}
+                        badged={!hard && secret.isRoot}
+                        copied={copiedValue === secret.value}
+                        nudge={easy && secret.isRoot && !hasCopiedRoot}
+                        onCopy={() => copyToClipboard(secret.value)}
+                      />
+                    )
+                  )}
                 </div>
               )}
             </div>
