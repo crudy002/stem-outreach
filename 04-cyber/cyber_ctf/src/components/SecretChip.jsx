@@ -4,9 +4,9 @@ import { useTheme } from '../theme.jsx';
 //
 // Every secret gets a chip, including the decoys. In HARD mode that's the
 // whole challenge: if only the real password were copyable, the button
-// would hand over the answer. `badged` is the difficulty lever — ROOKIE and
-// EASY get the superhero flash on the one that actually opens sudo, HARD
-// gets no help and has to read the labels.
+// would hand over the answer. `badged` is the difficulty lever — EASY gets
+// the superhero flash on the one that actually opens sudo, HARD gets no
+// help and has to read the labels.
 export function SecretChip({ secret, badged, copied, nudge, onCopy }) {
   const { theme } = useTheme();
   const color = badged ? theme.success : theme.muted;

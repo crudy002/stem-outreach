@@ -45,9 +45,9 @@ DB_PATH = Path(__file__).parent / "leaderboard.db"
 STATIC_DIR = Path(os.environ.get("STATIC_DIR", Path(__file__).parent.parent / "cyber_ctf" / "dist"))
 
 # Difficulty modes the game reports. Ranking is scoped to one of these:
-# a ROOKIE run (tap coloured blocks) is inherently faster than a HARD run
+# an EASY run (click-to-explore) is inherently faster than a HARD run
 # (type every command), so a single mixed board would just rank by mode.
-MODES = ("rookie", "easy", "hard")
+MODES = ("easy", "hard")
 
 app = FastAPI(title="Cyber CTF Leaderboard", docs_url=None)
 
@@ -209,7 +209,7 @@ def list_scores(
     `rank` is always a rank *within that row's mode*, so a board filtered to
     one difficulty reads 1, 2, 3 as expected, and an unfiltered board still
     reports each run's standing against its own difficulty rather than
-    against a rookie's block-tapping time.
+    against an easy-mode player's click-through time.
     """
     if limit < 1 or limit > 100:
         raise HTTPException(400, "limit must be between 1 and 100")
@@ -257,8 +257,8 @@ def reset_scores(
     """Wipe the board — for clearing test runs between booth sessions.
 
     With no `mode`, every run is deleted. With one, only that difficulty's
-    board is cleared, so a botched rookie session doesn't cost you the day's
-    hard-mode times.
+    board is cleared, so a botched easy-mode session doesn't cost you the
+    day's hard-mode times.
     """
     if mode is not None:
         mode = mode.lower()

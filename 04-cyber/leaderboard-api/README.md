@@ -33,15 +33,15 @@ needed. Set `STATIC_DIR` to point somewhere else, or just don't build
 
 ## One board per difficulty
 
-Runs are ranked **within their difficulty mode, never across modes**. A
-`rookie` player tapping coloured blocks finishes far faster than a `hard`
-player typing every command, so a single mixed board would rank by mode
-and a hard-mode player would never reach the top of it.
+Runs are ranked **within their difficulty mode, never across modes**. An
+`easy` player clicking through the file browser finishes far faster than a
+`hard` player typing every command, so a single mixed board would rank by
+mode and a hard-mode player would never reach the top of it.
 
-Every score therefore carries a `mode` of `rookie`, `easy` or `hard`, and
-the `rank` the API returns is always that run's standing among runs of the
-same mode. The game submits the mode it was played on and asks for one
-mode's board at a time.
+Every score therefore carries a `mode` of `easy` or `hard`, and the `rank`
+the API returns is always that run's standing among runs of the same mode.
+The game submits the mode it was played on and asks for one mode's board
+at a time.
 
 Rows written before this existed have `mode: null`. They are kept, and
 rank among themselves rather than polluting a real mode's board.
@@ -62,8 +62,8 @@ rank among themselves rather than polluting a real mode's board.
   max 100). Without `mode`, every run is returned, each still carrying its
   own per-mode rank. An unknown mode is rejected with a 400.
 - `DELETE /scores` — wipes the board (for clearing test runs between
-  sessions). `DELETE /scores?mode=rookie` clears just that difficulty, so a
-  botched rookie session doesn't cost you the day's hard-mode times.
+  sessions). `DELETE /scores?mode=easy` clears just that difficulty, so a
+  botched easy-mode session doesn't cost you the day's hard-mode times.
 
 ## Schema changes
 

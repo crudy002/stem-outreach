@@ -2,9 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 const FLAG = 'ctf{w34k_p455w0rd5_4r3_b4d}';
 
-// Files that are always on the box. Each carries its own one-line lesson,
-// because ROOKIE mode used to key those off hard-coded paths and the
-// password's file now moves between runs.
+// Files that are always on the box.
 //
 // Three of these hold deliberate decoys: a wifi password, a service
 // account password, an API key, and a rotated-out old root password. None
@@ -14,27 +12,22 @@ const BASE_FILES = [
   {
     path: 'README.txt',
     body: 'Welcome to the system.\n\nThis is a training environment for STEM Outreach.\nLook around. Some files contain sensitive info.',
-    lesson: 'Recon first — real attackers read the docs before touching anything.',
   },
   {
     path: 'logs/access.log',
     body: '2026-05-09 14:22:11 LOGIN admin from 192.168.1.42\n2026-05-09 14:22:18 SUDO admin\n2026-05-09 14:22:33 LOGIN admin from 192.168.1.42\n# rotated on 2026-04-01, no longer accepted:\nold_root_password=hunter2',
-    lesson: "Logs are how defenders catch intruders after the fact. This one also leaks an OLD password — rotating a password only helps if you scrub it from the places it leaked.",
   },
   {
     path: 'config/network.conf',
     body: 'interface=eth0\nip=192.168.1.42\ngateway=192.168.1.1\nwifi_password=GuestLounge2019',
-    lesson: 'Network configs show how a system talks to others. A wifi password is a real secret — just not the one that makes you root.',
   },
   {
     path: 'config/service.conf',
     body: '# background job runner\nservice_user=app\ndb_password=app_svc_9021\nretries=3',
-    lesson: 'Service accounts have their own passwords. Grabbing the first one you see is how attackers waste hours.',
   },
   {
     path: 'projects/notes.md',
     body: "Reminder: rotate the root password.\nAlso need to fix that thing in the config files.\n\napi_key=sk_live_2f9d41ba77c3",
-    lesson: 'To-do notes and sticky reminders leak secrets by accident all the time.',
   },
 ];
 
@@ -45,27 +38,22 @@ const HIDING_SPOTS = [
   {
     path: 'config/credentials.txt',
     body: (pw) => `# DO NOT COMMIT THIS FILE\nroot_user=root\nroot_password=${pw}`,
-    lesson: "Found it! Never store real passwords in plain text — that's exactly how breaches like this happen.",
   },
   {
     path: 'config/backup.conf',
     body: (pw) => `# emergency restore settings\nrestore_target=/dev/sda1\nroot_password=${pw}`,
-    lesson: 'Found it! Backup and restore configs are a classic hiding place — everyone forgets they contain live credentials.',
   },
   {
     path: 'projects/handoff.md',
     body: (pw) => `Handing this box over to the new admin.\nEverything you need is here:\n\nroot_password=${pw}\n\nTODO: delete this file once you've memorised it.`,
-    lesson: "Found it! That TODO never gets done. Handover notes outlive the handover.",
   },
   {
     path: 'logs/install.log',
     body: (pw) => `[ok] packages installed\n[ok] user root configured\n[warn] plaintext secret written to log:\nroot_password=${pw}\n[ok] install complete`,
-    lesson: 'Found it! Installers log more than they should, and nobody reads install logs — except attackers.',
   },
   {
     path: 'backup/env.bak',
     body: (pw) => `# leftover from the server migration\nDB_HOST=localhost\nroot_password=${pw}`,
-    lesson: 'Found it! Stray .bak files from a migration are free credentials for anyone who looks.',
   },
 ];
 
@@ -78,20 +66,18 @@ const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 // shell refuses to `cd` into.
 const buildWorld = () => {
   const spot = pick(HIDING_SPOTS);
-  const entries = [...BASE_FILES, { path: spot.path, body: spot.body(FLAG), lesson: spot.lesson }]
+  const entries = [...BASE_FILES, { path: spot.path, body: spot.body(FLAG) }]
     .sort((a, b) => a.path.localeCompare(b.path));
 
   const fileSystem = {};
-  const lessons = {};
   for (const entry of entries) {
     const segments = entry.path.split('/');
     for (let i = 1; i < segments.length; i += 1) {
       fileSystem[`${segments.slice(0, i).join('/')}/`] = null;
     }
     fileSystem[entry.path] = entry.body;
-    lessons[entry.path] = entry.lesson;
   }
-  return { fileSystem, lessons, flagPath: spot.path };
+  return { fileSystem, flagPath: spot.path };
 };
 
 // Pulls password-shaped assignments out of command output so every one of
@@ -133,8 +119,8 @@ const resolvePath = (base, input) => {
   return parts.join('/');
 };
 
-// Nested tree view for the easy-mode file browser sidebar and the rookie
-// block grid, so those stay decoupled from the flat slash-key convention.
+// Nested tree view for the easy-mode file browser sidebar, decoupled from
+// the flat slash-key convention.
 const buildFileTree = (fileSystem) => {
   const root = { type: 'dir', name: '', path: '', children: {} };
   for (const key of Object.keys(fileSystem)) {
@@ -165,7 +151,7 @@ const buildFileTree = (fileSystem) => {
 export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
   // Regenerated on reset() so the next player gets a new hiding spot.
   const [world, setWorld] = useState(buildWorld);
-  const { fileSystem, lessons, flagPath } = world;
+  const { fileSystem, flagPath } = world;
   const fileTree = useMemo(() => buildFileTree(fileSystem), [fileSystem]);
 
   const [terminalOutput, setTerminalOutput] = useState([]);
@@ -559,7 +545,6 @@ export function useTerminal({ playerName, onCredentialsFound, onRootAccess }) {
     FLAG,
     fileTree,
     flagPath,
-    lessonFor: (path) => lessons[path] || null,
     terminalOutput,
     command,
     setCommand,

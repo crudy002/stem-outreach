@@ -281,8 +281,8 @@ every additional station — everything above is already baked in.
   ```bash
   ssh dietpi@<pi-ip> "curl -X DELETE http://127.0.0.1:8000/scores"
   ```
-  Add `?mode=rookie` (or `easy`/`hard`) to wipe just one difficulty's board
-  instead of all three — each difficulty is ranked separately.
+  Add `?mode=easy` (or `hard`) to wipe just one difficulty's board instead
+  of both — each difficulty is ranked separately.
 - **Decide on hostnames.** Every clone boots with the same hostname
   unless you change it. `AUTO_SETUP_NET_HOSTNAME` in `/boot/dietpi.txt` is
   editable straight from a card reader before first boot (`/boot` is a

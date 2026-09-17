@@ -28,14 +28,13 @@ FastAPI serve the output. See the [booth deployment guide](../README.md).
 
 ## Difficulty modes
 
-The mode is picked on the briefing screen, before the clock starts. All
-three end at the same flag; they differ in how much typing stands between
-the player and it.
+The mode is picked on the briefing screen, before the clock starts. Both
+end at the same flag; they differ in how much typing stands between the
+player and it.
 
 | Mode     | How you play                                            | Aimed at        |
 |----------|---------------------------------------------------------|-----------------|
-| `rookie` | Tap big file blocks, then pick a one-time access code    | Youngest kids   |
-| `easy`   | Click files in a browser sidebar, one-click root unlock  | Middle ground   |
+| `easy`   | Click files in a browser sidebar, one-click root unlock  | Younger kids / first-timers |
 | `hard`   | Type every command in the simulated shell                | Anyone who can type |
 
 ### The search
@@ -54,9 +53,9 @@ Every password-shaped value in command output gets its own copy chip, so
 the copy button itself never gives the answer away. What separates the
 modes is the **🦸 superhero badge**:
 
-- `rookie` and `easy` badge the one that actually works, and in `easy` the
-  root unlock button stays disabled until that specific value is copied.
-  Copying a decoy does nothing.
+- `easy` badges the one that actually works, and the root unlock button
+  stays disabled until that specific value is copied. Copying a decoy does
+  nothing.
 - `hard` badges nothing. Every chip looks identical and the player has to
   read the labels and work out which secret is the root password.
 
@@ -64,9 +63,10 @@ Guessing wrong isn't a dead end: `sudo` allows three attempts and says
 "Sorry, try again", and enough failures surface the CALL FOR BACKUP panel
 described below.
 
-**Each mode has its own leaderboard.** A rookie tapping blocks will always
-be faster than someone typing `grep password config/backup.conf` by hand, so a
-single mixed board would just rank players by difficulty. Scores are
+**Each mode has its own leaderboard.** Someone clicking through the easy-mode
+sidebar will always be faster than someone typing `grep password
+config/backup.conf` by hand, so a single mixed board would just rank players
+by difficulty. Scores are
 submitted with their mode and ranked only against the same mode. The board
 on the briefing screen follows whichever difficulty is currently selected.
 
@@ -87,15 +87,11 @@ on the briefing screen follows whichever difficulty is currently selected.
      supports `pwd`, `head`, `find`, `file`, `whoami`, `id`, `history`,
      `man <cmd>`, `clear`, `help`, Tab-completion, and ↑/↓ for history.
    - `easy`: click files in the sidebar; each one runs `cat` for you.
-   - `rookie`: tap the file blocks. Every file teaches a one-line lesson
-     when opened, not just the one holding the password.
 4. **Escalate** — copy the root password using the chip under that output,
    then:
    - `hard`: run `sudo su` and paste the flag at the masked password prompt
      (3 attempts, like a real terminal).
    - `easy`: hit "🔓 Unlock Root Access", which types it in for you.
-   - `rookie`: memorise the one-time access code and pick it from three
-     options.
 5. **Elevated terminal** — VIEW LOGS and DOWNLOAD DATA are flavour with
    their own animations; **INJECT PAYLOAD** ends the run. The clock stops
    at root access, not at this click, so poking at the other two costs
@@ -136,7 +132,7 @@ cyber_ctf/
     ├── main.jsx                # React bootstrap
     ├── App.jsx                 # stage machine, timer, leaderboard calls
     ├── theme.jsx               # colour themes (incl. a high-contrast one for glare)
-    ├── modes.js                # the three difficulties, shared by picker + board
+    ├── modes.js                # the two difficulties, shared by picker + board
     ├── hooks/
     │   └── useTerminal.js      # the fake file system and shell — start here
     └── components/             # one file per screen/overlay
@@ -148,10 +144,9 @@ where you go to change what the challenge actually *is*. **`App.jsx`** owns
 which stage is on screen, the run timer, and leaderboard submission.
 
 To add a hiding spot or a decoy, edit `HIDING_SPOTS` or `BASE_FILES` at the
-top of `useTerminal.js`. Each entry carries its own body text and the
-one-line lesson rookie mode shows, and directory markers are derived from
-the paths, so a spot in a brand-new folder works without touching anything
-else.
+top of `useTerminal.js`. Each entry carries its own body text, and directory
+markers are derived from the paths, so a spot in a brand-new folder works
+without touching anything else.
 
 (This used to all live in one `App.jsx`. It was split up once it stopped
 fitting on a screen; the behaviour didn't change.)

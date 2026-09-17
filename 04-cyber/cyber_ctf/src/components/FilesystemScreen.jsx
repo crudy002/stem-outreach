@@ -1,11 +1,9 @@
 import { FileBrowserSidebar } from './FileBrowserSidebar';
 import { SecretChip } from './SecretChip';
-import { BlockProgramScreen } from './BlockProgramScreen';
 import { useTheme } from '../theme.jsx';
 
 export function FilesystemScreen({ terminal, mode }) {
   const { theme } = useTheme();
-  if (mode === 'rookie') return <BlockProgramScreen terminal={terminal} />;
   const {
     fileTree,
     terminalOutput,

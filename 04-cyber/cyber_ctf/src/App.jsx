@@ -29,7 +29,7 @@ const randomCreds = () => ({
 export default function App() {
   const { theme, themeId, setThemeId } = useTheme();
   const [stage, setStage] = useState('start'); // start, login, filesystem, escalate, hacked, victory
-  const [mode, setMode] = useState('easy'); // rookie: tap coloured blocks. easy: click-to-explore + one-click root. hard: type every command.
+  const [mode, setMode] = useState('easy'); // easy: click-to-explore + one-click root. hard: type every command.
   // Which mode's leaderboard is on screen. Follows the difficulty picker on
   // the start screen, but the modal can browse other modes' boards without
   // changing what the next player is about to play.
@@ -66,8 +66,9 @@ export default function App() {
     if (stage === 'filesystem' && commandInputRef.current) commandInputRef.current.focus();
   }, [stage]);
 
-  // Boards are always per-mode: a rookie tapping blocks would otherwise
-  // outrank every hard-mode player who typed the commands by hand.
+  // Boards are always per-mode: an easy-mode player clicking through files
+  // would otherwise outrank every hard-mode player who typed the commands
+  // by hand.
   // `m` is guarded rather than defaulted: this is wired straight to onClick
   // in a couple of places, and React would hand a click event in as the
   // first argument.
